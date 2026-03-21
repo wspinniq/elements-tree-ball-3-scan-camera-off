@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>聖誕化學大百科 - 比例縮放與非重疊版</title>
+<style>
+:root{ --ballTexture: none; }
+
+:root {
+    --gold: #ffeb3b;
+    --tree-dark: #0a4d28;
+
+    /* ===== 月亮光暈位置可調（bg0 右上月亮）=====
+       這是「覆蓋在 bg0 上」的光暈特效（不會蓋住 bg1）
+       你可以依照你的 bg0 月亮位置調整：
+       - --moonTop / --moonRight：光暈的右上定位
+       - --moonSize：光暈直徑
+       - --moonGlowOpacity：整體亮度
+    ============================================ */
+    --moonTop: 5.5vh;
+    --moonRight: 9vw;
+    --moonSize: 40vmin;
+    --moonGlowOpacity: 0.85;
+
+    /* ===== 底部資訊區（固定範圍）可調參數 =====
+       讓「描述標題(左)」與「描述內容(右)」永遠不碰到彼此、也不貼螢幕邊界。
+       - --infoSide：左右邊界安全距離
+       - --infoBottom：底部安全距離
+       - --infoGap：左右兩塊的間距
+       - --infoBoxH：兩塊共同高度（固定範圍）
+       - --titleBoxW：左側標題塊寬度（固定範圍）
+    ======================================== */
+    --infoSide: 3.5vw;
+    --infoBottom: 4vh;
+    --infoGap: 2.6vw;
+    --infoBoxH: 14vh;
+    --titleBoxW: 26vw;
+
+}
+
+html, body {
+    margin: 0; width: 100%; height: 100%; overflow: hidden;
+    background: radial-gradient(circle at center, #0d1b2a 0%, #020824 100%);
+    background-image: url('bg0.png');
+    background-size: cover;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: white;
+}
+
+
+#moleculeArea { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; }
+
+#moleculeArea, #bondLayer{ display:none !important; }
+
+.atom {
+    position: absolute;
+    width: 8vw; height: 8vw; /* 依螢幕寬度自動縮放 */
+    min-width: 60px; min-height: 60px;
+    max-width: 120px; max-height: 120px;
+    border-radius: 50%;
+    overflow: hidden;
+    /* 元素顏色底（保留原本顏色渲染） */
+    background-image: radial-gradient(circle at 30% 30%, var(--c1, #b0bec5), var(--c2, #455a64));
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    font-weight: 900; 
+    font-size: 3vw; /* 文字同步縮放 */
+    color: white;
+
+    /* 強對比描邊，適合近視閱讀 */
+    -webkit-text-stroke: 1px black;
+    text-shadow: 2px 2px 4px #000;
+
+    box-shadow: inset -5px -5px 15px rgba(0,0,0,0.5), 0 5px 15px rgba(0,0,0,0.4);
+    transition: all 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ball 紋理層（透明度可調），不影響元素色彩，只增加球面材質感 */
+:root{
+    --ballTexOpacity: 1.8;   /* ← 你要更透明就調小，例如 0.12；想更明顯就調大，例如 0.35 */
+}
+.atom::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background-image: var(--ballTexture);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: var(--ballTexOpacity);
+    mix-blend-mode: soft-light;
+    pointer-events:none;
+}
+
+/* 內層：用來做「浮動動畫」，避免影響定位(left/top) */
+.atomInner{
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 1;
+}
+
+/* 文字 */
+.atomLabel{
+    position: relative;
+    z-index: 2;
+}
+
+/* 定位完成後的小幅浮動：每顆球的頻率/距離由 JS 隨機寫入 CSS 變數 */
+.atom.floating .atomInner{
+    animation: atomFloat var(--floatDur, 3.2s) ease-in-out var(--floatDelay, 0s) infinite;
+}
+
+@keyframes atomFloat{
+    0%   { transform: translate(0px, 0px); }
+    25%  { transform: translate(calc(var(--floatAmpX, 6px) * 0.55), calc(var(--floatAmpY, 8px) * -0.85)); }
+    50%  { transform: translate(var(--floatAmpX, 6px), var(--floatAmpY, 8px)); }
+    75%  { transform: translate(calc(var(--floatAmpX, 6px) * -0.55), calc(var(--floatAmpY, 8px) * 0.95)); }
+    100% { transform: translate(0px, 0px); }
+}
+
+
+/* 元素配色表 */
+.H { --c1: #bbdefb; --c2: #1976d2; }
+.O { --c1: #ffcdd2; --c2: #d32f2f; }
+.C { --c1: #757575; --c2: #000000; }
+.N { --c1: #c8e6c9; --c2: #388e3c; }
+.S { --c1: #fff9c4; --c2: #fbc02d; }
+.Cl { --c1: #dcedc8; --c2: #689f38; }
+.Na, .K, .Ag { --c1: #e1bee7; --c2: #7b1fa2; }
+.Ca, .Mg, .Al, .Ti, .Fe, .Cu { --c1: #ffe0b2; --c2: #e65100; }
+.P, .Si { --c1: #ffccbc; --c2: #bf360c; }
+.He, .Ne, .Ar { --c1: #f3e5f5; --c2: #7b1fa2; }
+
+
+/* ========================= 位置座標可調區（描述文字） =========================
+   #info 是「描述文字區」的容器（固定範圍、不貼邊、不互相碰）：
+   - 左側：描述標題（化學式）
+   - 右側：描述內容
+   位置／大小請改 :root 內的：
+   --infoSide / --infoBottom / --infoGap / --infoBoxH / --titleBoxW
+   ============================================================================ */
+#info{
+    /* 讓標題與介紹可以各自定位（標題留左下、介紹移到右側中間） */
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    opacity: 0;
+    transition: 0.8s;
+    padding: 0;
+    pointer-events: none;
+}
+
+#info h2{
+    /* 元素名稱/化學式：維持舊版在左下方 */
+    position: absolute;
+    left: var(--infoSide);
+    bottom: var(--infoBottom);
+
+    width: clamp(220px, var(--titleBoxW), 36vw);
+    height: clamp(96px, var(--infoBoxH), 22vh);
+
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: var(--gold);
+    text-shadow: 3px 3px 10px #000;
+
+    /* 半透明底塊：無描邊 */
+    background: rgba(0, 10, 30, 0.40);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 28px;
+
+    padding: 0 3.2vw;
+
+    /* 固定區域 + 自動縮字：避免換行、避免溢出 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#info p{
+    /* 元素介紹：右側中間，固定字級，自動斷行 */
+    position: absolute;
+    right: var(--infoSide);
+    top: 50%;
+    transform: translateY(-50%);
+
+    width: min(44vw, 680px);
+    min-height: clamp(120px, 18vh, 200px);
+
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+
+    font-weight: 800;
+    font-size: 50px;
+    line-height: 1.8;
+    text-align: left;
+    letter-spacing: 0.08em;
+    color: #fff;
+
+    /* 半透明底塊：無描邊 */
+    background: rgba(0, 10, 30, 0.40);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 28px;
+
+    padding: 1.2em 2.2vw 0.8em;
+    box-sizing: border-box;
+
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: clip;
+}
+
+#info p .descText{
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+
+.zhuyin-side{
+    display:inline-flex;
+    white-space:nowrap;
+    align-items:center;
+    gap:0.02em;
+    margin-right:0.04em;
+    vertical-align:middle;
+}
+.zhuyin-side .base{
+    font-size:1em;
+    line-height:1;
+}
+.zhuyin-side .bpmf{
+    position:relative;
+    display:inline-flex;
+    align-items:flex-start;
+    justify-content:center;
+    width:0.92em;
+    margin-left:0.05em;
+    vertical-align:middle;
+    color:#ffe082;
+    font-weight:700;
+    font-size:0.34em;
+    line-height:1;
+    min-height:1.18em;
+}
+.zhuyin-side .bpmf .letters{
+    display:inline-flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    line-height:0.84;
+}
+.zhuyin-side .bpmf .letters span,
+.zhuyin-side .bpmf .tone{
+    display:block;
+}
+.zhuyin-side .bpmf .tone{
+    position:absolute;
+    right:-0.79em;
+    top:-0.0em;
+    font-size:0.95em;
+    line-height:1;
+    margin-left:0;
+    align-self:auto;
+}
+
+rt{
+    font-size: 0.38em;
+    line-height: 1;
+    color: #ffe082;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* 月亮光暈層：在 bg0 上、星星層下、bg1 下（不會蓋住 bg1） */
+#moonHalo{
+    position:absolute;
+    inset:0;
+    z-index: 1; /* bg0(底) < moonHalo(1) < stars(2) < haze(3) < bg1(5) */
+    pointer-events:none;
+    overflow:hidden;
+}
+#moonHalo::before{
+    content:"";
+    position:absolute;
+    top: var(--moonTop);
+    right: var(--moonRight);
+    width: var(--moonSize);
+    height: var(--moonSize);
+    border-radius: 50%;
+    /* 主要柔光：偏冷的月光色 */
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.78) 0%,
+        rgba(220,240,255,0.40) 28%,
+        rgba(170,210,255,0.20) 52%,
+        rgba(170,210,255,0.00) 76%);
+    opacity: var(--moonGlowOpacity);
+    filter: blur(2.2px);
+    mix-blend-mode: screen;
+    transform: translateZ(0);
+    animation: moonPulse 3.2s ease-in-out infinite;
+}
+#moonHalo::after{
+    content:"";
+    position:absolute;
+    top: calc(var(--moonTop) + var(--moonSize) * 0.08);
+    right: calc(var(--moonRight) + var(--moonSize) * 0.10);
+    width: calc(var(--moonSize) * 0.72);
+    height: calc(var(--moonSize) * 0.72);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.36) 0%,
+        rgba(210,235,255,0.18) 34%,
+        rgba(210,235,255,0.00) 72%);
+    opacity: calc(var(--moonGlowOpacity) * 0.9);
+    filter: blur(3.2px);
+    mix-blend-mode: screen;
+    transform: translateZ(0);
+    animation: moonPulse 4.1s ease-in-out infinite reverse;
+}
+@keyframes moonPulse{
+    0%   { transform: scale(0.90); opacity: calc(var(--moonGlowOpacity) * 0.60); }
+    50%  { transform: scale(1.14); opacity: calc(var(--moonGlowOpacity) * 1.00); }
+    100% { transform: scale(0.92); opacity: calc(var(--moonGlowOpacity) * 0.65); }
+}
+
+
+
+/* 背景前景圖層（同資料夾：bg0.png / bg1.png） */
+#bg1Layer{
+    position:absolute;
+    left:50%;
+    bottom:0;
+    transform: translateX(-50%);
+    height: 88vh;
+    width: auto;
+    z-index: 5;              /* 在背景之上、元素球之下 */
+    pointer-events:none;
+    opacity: 0.98;
+    filter: drop-shadow(0 10px 30px rgba(0,0,0,0.35));
+}
+#bg1Layer img{
+    height:100%;
+    width:auto;
+    max-width: 100vw;
+    display:block;
+}
+
+/* 霧化/氛圍層：在背景與前景之間 */
+/* 閃爍星星層：在 bg0 上、bg1 下（不會蓋住 bg1） */
+#starLayer{
+    position:absolute;
+    inset:0;
+    z-index: 2;           /* bg0(底) < stars < haze(3) < bg1(5) < atoms(20) */
+    pointer-events:none;
+    overflow:hidden;
+}
+#starLayer .star{
+    position:absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,1);
+    /* 更明顯的發光（你可調下面兩個強度） */
+    box-shadow: 0 0 18px rgba(255,255,255,0.95), 0 0 34px rgba(170,210,255,0.55);
+    filter: brightness(1.10);
+    opacity: 0.0;
+    transform: translateZ(0);
+    animation: twinkle var(--twinkleDur, 3s) ease-in-out var(--twinkleDelay, 0s) infinite;
+}
+#starLayer .star.big{
+    box-shadow: 0 0 26px rgba(255,255,255,0.98), 0 0 58px rgba(170,210,255,0.60), 0 0 86px rgba(120,180,255,0.25);
+    filter: brightness(1.30);
+}
+
+@keyframes twinkle{
+    0%   { opacity: 0.03; transform: scale(0.68); filter: brightness(0.85); }
+    32%  { opacity: 1.00; transform: scale(1.42); filter: brightness(1.85); }
+    58%  { opacity: 0.18; transform: scale(0.92); filter: brightness(1.05); }
+    100% { opacity: 0.06; transform: scale(0.74); filter: brightness(0.90); }
+}
+.haze{
+    position:absolute;
+    inset:0;
+    z-index: 3;
+    pointer-events:none;
+    background:
+        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 45%),
+        linear-gradient(to top, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.0) 55%);
+}
+
+
+
+/* ========================= 位置座標可調區（an1~an6 圖） =========================
+   #ansPanel 是左側圖片面板（顯示 an1~an6 隨機圖）的定位座標：
+   - left: 4vw   → 距離螢幕左側 4% 視窗寬度
+   - top:  14vh  → 距離螢幕頂部 14% 視窗高度
+   - width:34vw  → 面板寬度（會再被 max/min 限制）
+   你可以調整：
+   - left / top：面板移動位置
+   - width：放大/縮小圖片面板
+   - z-index：圖層（目前在 bg1 之下、元素球之下/上視需求可調）
+   ============================================================================ */
+/* 左側答案圖（描述出現時顯示） */
+#ansPanel{
+    position:absolute;
+    left: 4vw;
+    top: 14vh;
+    width: 34vw;
+    max-width: 620px;
+    min-width: 220px;
+    z-index: 12;
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.45));
+}
+#ansPanel img{
+    width:100%;
+    height:auto;
+    display:block;
+    border-radius: 18px;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+
+#ansPanel{ overflow: visible; }
+#peekImg{
+    /*
+      scanspeek1~6 位置：由 JS 動態放在「an1~6（ansImg）」與「bg1」的中間。
+      用 fixed 讓它不受 ansPanel 影響，並能精準對齊兩者之間。
+    */
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+
+    width: min(16vw, 260px);
+    max-width: 260px;
+    min-width: 120px;
+    height:auto;
+    display:block;
+    border-radius: 18px;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events:none;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.45));
+
+    /* 圖層優先度：高於 an1~6(12) 與 bg1(5) */
+    z-index: 60;
+}
+
+
+
+/* ===== Bond lines (SVG) ===== */
+#bondLayer{
+    position:absolute;
+    inset:0;
+    z-index: 19; /* under atoms (20), above bg1 (5) */
+    pointer-events:none;
+}
+#bondLayer line{
+    stroke: rgba(255,255,255,0.92);
+    stroke-width: 8;
+    stroke-linecap: round;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+}
+#bondLayer line.thin{
+    stroke-width: 5;
+    opacity: 0.78;
+}
+#bondLayer line.dashed{
+    stroke-dasharray: 10 10;
+    opacity: 0.72;
+}
+
+
+/* ========================= 前置鏡頭小畫面（左上角） ========================= */
+#selfCamWrap{
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    width: min(22vw, 240px);
+    aspect-ratio: 4 / 3;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+    z-index: 9999;
+    pointer-events: none; /* 不要擋到遊戲操作 */
+}
+#selfCamWrap video,
+#selfCamWrap canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* 自拍鏡像 */
+}
+#selfCamWrap canvas{
+    pointer-events:none;
+}
+#selfCamWatermark{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit: contain;
+    z-index: 2;
+    pointer-events:none;
+}
+#selfCamHint{
+    z-index: 3;
+    position:absolute;
+    left: 8px;
+    bottom: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #fff;
+    background: rgba(0,0,0,0.45);
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.55);
+}
+@media (max-width: 520px){
+    #selfCamWrap{ width: min(34vw, 180px); }
+}
+/* ========================================================================== */
+
+</style>
+</head>
+<body>
+
+<div aria-hidden="true" id="starLayer"></div>
+<div aria-hidden="true" id="moonHalo"></div>
+<div aria-hidden="true" class="haze"></div>
+<div aria-hidden="true" id="bg1Layer"><img alt="" src="bg1.png"/></div>
+<div aria-hidden="true" id="ansPanel"><img id="ansImg" data-role="answer" alt="answer" src=""/><img id="peekImg" data-role="peek" alt="scanspeek" src="" /></div>
+<div id="moleculeArea"></div>
+<svg id="bondLayer" aria-hidden="true"></svg>
+<div id="info"></div>
+
+<!-- 前置鏡頭小畫面（左上角） -->
+<div id="selfCamWrap" aria-hidden="true">
+    <video id="selfCam" autoplay playsinline muted></video>
+    <canvas id="selfOverlay"></canvas>
+    <img id="selfCamWatermark" src="watermark.png" alt="watermark">
+    
+</div>
+
+<!-- QR 掃描用鏡頭（預設隱藏；用於偵測 QR CODE 觸發分子切換） -->
+<div id="qrCamWrap" aria-hidden="true" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none;">
+    <video id="qrVideo" autoplay playsinline muted></video>
+    <canvas id="qrCanvas" hidden></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+
+/* ========================= 前置鏡頭 / 浮水印顯示開關 =========================
+   說明：
+   - SHOW_SELF_CAM_PREVIEW：true=顯示左上前置鏡頭視窗，false=隱藏左上前置鏡頭視窗
+   - SHOW_WATERMARK：true=顯示 watermark，false=隱藏 watermark
+   - ALLOW_SELF_CAM_QR_FALLBACK：true=若後鏡頭無法啟動，允許改用前鏡頭做 QR 掃描
+     （即使 SHOW_SELF_CAM_PREVIEW=false，前鏡頭仍可在背景啟動供 QR 掃描使用）
+============================================================================ */
+const CAMERA_UI_CONFIG = {
+  SHOW_SELF_CAM_PREVIEW: false,
+  SHOW_WATERMARK: false,
+  ALLOW_SELF_CAM_QR_FALLBACK: true
+};
+
+/* ========================= 前置鏡頭啟動（參考 scan game.html 的寫法） =========================
+   - 頁面載入後立即 getUserMedia()
+   - 使用 facingMode: "user" 取得前置鏡頭
+   - 若支援 FaceDetector，會在小畫面上畫出臉部框（可用於互動/偵測）
+=========================================================================================== */
+const __selfCamWrap = document.getElementById('selfCamWrap');
+const __selfCam = document.getElementById('selfCam');
+const __selfOverlay = document.getElementById('selfOverlay');
+const __selfCamWatermark = document.getElementById('selfCamWatermark');
+const __selfHint = document.getElementById('selfCamHint');
+const __selfCtx = __selfOverlay ? __selfOverlay.getContext('2d') : null;
+
+function applyCameraUiConfig(){
+  if(__selfCamWrap){
+    __selfCamWrap.style.display = CAMERA_UI_CONFIG.SHOW_SELF_CAM_PREVIEW ? '' : 'none';
+  }
+  if(__selfCamWatermark){
+    __selfCamWatermark.style.display = CAMERA_UI_CONFIG.SHOW_WATERMARK ? '' : 'none';
+  }
+}
+applyCameraUiConfig();
+
+let __selfStream = null;
+let __faceDetector = null;
+
+try{
+  if ('FaceDetector' in window){
+    __faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+  }
+}catch(e){
+  __faceDetector = null;
+}
+
+async function startSelfCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw new Error('Browser does not support getUserMedia');
+  }
+
+  // 先嘗試前置鏡頭；失敗再退回一般 video:true
+  try{
+    __selfStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+  }catch(e){
+    __selfStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+
+  __selfCam.srcObject = __selfStream;
+
+  // 某些裝置需要顯式 play
+  try{ await __selfCam.play(); }catch(e){}
+
+  requestAnimationFrame(selfCamLoop);
+}
+
+async function selfCamLoop(){
+  if(__selfCam && __selfCam.readyState === __selfCam.HAVE_ENOUGH_DATA && __selfCtx){
+    const w = __selfCam.videoWidth || 0;
+    const h = __selfCam.videoHeight || 0;
+
+    if(w > 0 && h > 0){
+      if(__selfOverlay.width !== w || __selfOverlay.height !== h){
+        __selfOverlay.width = w;
+        __selfOverlay.height = h;
+      }
+
+      // 畫臉部框（可選）
+      __selfCtx.clearRect(0, 0, w, h);
+
+      if(__faceDetector){
+        try{
+          const faces = await __faceDetector.detect(__selfCam);
+          __selfCtx.lineWidth = Math.max(2, Math.round(w * 0.006));
+          __selfCtx.strokeStyle = 'rgba(0,255,255,0.95)';
+          for(const f of faces){
+            const b = f.boundingBox;
+            __selfCtx.strokeRect(b.x, b.y, b.width, b.height);
+          }
+        }catch(e){
+          // detect 失敗就不畫（避免干擾）
+        }
+      }
+    }
+  }
+  requestAnimationFrame(selfCamLoop);
+}
+
+// 頁面載入後立即啟動前置鏡頭（顯示預覽或允許 QR fallback 時才啟動）
+if (CAMERA_UI_CONFIG.SHOW_SELF_CAM_PREVIEW || CAMERA_UI_CONFIG.ALLOW_SELF_CAM_QR_FALLBACK) {
+  startSelfCamera().catch(err => {
+    console.error('前置鏡頭啟動失敗', err);
+    if(__selfHint) __selfHint.textContent = '前置鏡頭：未授權/無法啟動';
+  });
+}
+
+// 離開頁面時關閉鏡頭
+window.addEventListener('beforeunload', () => {
+  try{
+    if(__selfStream){
+      __selfStream.getTracks().forEach(t => t.stop());
+      __selfStream = null;
+    }
+  }catch(e){}
+});
+/* ================================================================================================= */
+
+// ====== UI 開關：是否顯示右側元素球/鍵結線 ======
+// 你要「移除右側元素球動畫」→ 設為 false
+const ENABLE_ATOMS = false;
+
+
+
+
+function renderZhuyinSide(html){
+    function buildZhuyinUnit(ch, syllable){
+        const s = String(syllable || '').trim();
+        const m = s.match(/^(.*?)([˙ˊˇˋ])?$/);
+        const letters = (m && m[1] ? m[1] : s).split('');
+        const tone = (m && m[2]) ? m[2] : '';
+        const lettersHtml = letters.map(function(part){
+            return '<span>' + part + '</span>';
+        }).join('');
+        const toneHtml = tone ? '<span class="tone">' + tone + '</span>' : '';
+        return '<span class="zhuyin-side"><span class="base">' + ch + '</span><span class="bpmf"><span class="letters">' + lettersHtml + '</span>' + toneHtml + '</span></span>';
+    }
+
+    return html.replace(/<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/g, function(_, base, bpmf){
+        const chars = Array.from(String(base).trim());
+        const syllables = String(bpmf).trim().split(/\s+/).filter(Boolean);
+
+        if (chars.length > 1 && chars.length === syllables.length) {
+            return chars.map(function(ch, i){
+                return buildZhuyinUnit(ch, syllables[i]);
+            }).join('');
+        }
+
+        if (chars.length === 1 && syllables.length === 1) {
+            return buildZhuyinUnit(chars[0], syllables[0]);
+        }
+
+        return '<span class="zhuyin-side"><span class="base">' + base + '</span><span class="bpmf"><span class="letters">' + Array.from(String(bpmf).replace(/\s+/g, '')).map(function(part){ return '<span>' + part + '</span>'; }).join('') + '</span></span></span>';
+    });
+}
+
+
+const rawData = [
+{ n:"Al", d:" [ <ruby>鋁<rt>ㄌㄩˇ</rt></ruby>] <br><ruby>很<rt>ㄏㄣˇ</rt></ruby><ruby>輕<rt>ㄑㄧㄥ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>金<rt>ㄐㄧㄣ</rt></ruby><ruby>屬<rt>ㄕㄨˇ</rt></ruby>，<ruby>延<rt>ㄧㄢˊ</rt></ruby><ruby>展<rt>ㄓㄢˇ</rt></ruby><ruby>性<rt>ㄒㄧㄥˋ</rt></ruby><ruby>佳<rt>ㄐㄧㄚ</rt></ruby>。"},
+{ n:"C", d:" [ <ruby>碳<rt>ㄊㄢˋ</rt></ruby>] <br><ruby>元<rt>ㄩㄢˊ</rt></ruby><ruby>素<rt>ㄙㄨˋ</rt></ruby><ruby>型<rt>ㄒㄧㄥˊ</rt></ruby><ruby>態<rt>ㄊㄞˋ</rt></ruby><ruby>多<rt>ㄉㄨㄛ</rt></ruby><ruby>樣<rt>ㄧㄤˋ</rt></ruby>，<ruby>像<rt>ㄒㄧㄤˋ</rt></ruby><ruby>是<rt>ㄕˋ</rt></ruby><ruby>石<rt>ㄕˊ</rt></ruby><ruby>墨<rt>ㄇㄛˋ</rt></ruby>、<ruby>鑽<rt>ㄗㄨㄢˋ</rt></ruby><ruby>石<rt>ㄕˊ</rt></ruby><ruby>及<rt>ㄐㄧˊ</rt></ruby><ruby>奈<rt>ㄋㄞˋ</rt></ruby><ruby>米<rt>ㄇㄧˇ</rt></ruby><ruby>碳<rt>ㄊㄢˋ</rt></ruby><ruby>管<rt>ㄍㄨㄢˇ</rt></ruby><ruby>等<rt>ㄉㄥˇ</rt></ruby>。"},
+{ n:"C₂H₅OH", d:" [ <ruby>乙<rt>ㄧˇ</rt></ruby><ruby>醇<rt>ㄔㄨㄣˊ</rt></ruby>] <br><ruby>又<rt>ㄧㄡˋ</rt></ruby><ruby>稱<rt>ㄔㄥ</rt></ruby><ruby>為<rt>ㄨㄟˊ</rt></ruby><ruby>食<rt>ㄕˊ</rt></ruby><ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>酒<rt>ㄐㄧㄡˇ</rt></ruby><ruby>精<rt>ㄐㄧㄥ</rt></ruby>，<ruby>易<rt>ㄧˋ</rt></ruby><ruby>揮<rt>ㄏㄨㄟ</rt></ruby><ruby>發<rt>ㄈㄚ</rt></ruby>，<ruby>可<rt>ㄎㄜˇ</rt></ruby><ruby>清<rt>ㄑㄧㄥ</rt></ruby><ruby>潔<rt>ㄐㄧㄝˊ</rt></ruby><ruby>消<rt>ㄒㄧㄠ</rt></ruby><ruby>毒<rt>ㄉㄨˊ</rt></ruby>。"},
+{ n:"CaCl₂", d:" [ <ruby>氯<rt>ㄌㄩˋ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>鈣<rt>ㄍㄞˋ</rt></ruby>] <br><ruby>吸<rt>ㄒㄧ</rt></ruby><ruby>水<rt>ㄕㄨㄟˇ</rt></ruby><ruby>性<rt>ㄒㄧㄥˋ</rt></ruby><ruby>很<rt>ㄏㄣˇ</rt></ruby><ruby>強<rt>ㄑㄧㄤˊ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>乾<rt>ㄍㄢ</rt></ruby><ruby>燥<rt>ㄗㄠˋ</rt></ruby><ruby>劑<rt>ㄐㄧˋ</rt></ruby>。"},
+{ n:"CaCO₃", d:" [ <ruby>碳<rt>ㄊㄢˋ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>鈣<rt>ㄍㄞˋ</rt></ruby>] <br><ruby>白<rt>ㄅㄞˊ</rt></ruby><ruby>色<rt>ㄙㄜˋ</rt></ruby><ruby>固<rt>ㄍㄨˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>，<ruby>骨<rt>ㄍㄨˇ</rt></ruby><ruby>頭<rt>ㄊㄡˊ</rt></ruby><ruby>牙<rt>ㄧㄚˊ</rt></ruby><ruby>齒<rt>ㄔˇ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>主<rt>ㄓㄨˇ</rt></ruby><ruby>要<rt>ㄧㄠˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>分<rt>ㄈㄣˋ</rt></ruby>。"},
+{ n:"CH₃COOH", d:" [ <ruby>醋<rt>ㄘㄨˋ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby>] <br><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>性<rt>ㄒㄧㄥˋ</rt></ruby><ruby>液<rt>ㄧㄝˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>，<ruby>可<rt>ㄎㄜˇ</rt></ruby><ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>來<rt>ㄌㄞˊ</rt></ruby><ruby>調<rt>ㄊㄧㄠˊ</rt></ruby><ruby>味<rt>ㄨㄟˋ</rt></ruby><ruby>及<rt>ㄐㄧˊ</rt></ruby><ruby>清<rt>ㄑㄧㄥ</rt></ruby><ruby>潔<rt>ㄐㄧㄝˊ</rt></ruby>。"},
+{ n:"CO₂", d:" [ <ruby>二<rt>ㄦˋ</rt></ruby><ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>碳<rt>ㄊㄢˋ</rt></ruby>] <br><ruby>呼<rt>ㄏㄨ</rt></ruby><ruby>吸<rt>ㄒㄧ</rt></ruby><ruby>作<rt>ㄗㄨㄛˋ</rt></ruby><ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>產<rt>ㄔㄢˇ</rt></ruby><ruby>物<rt>ㄨˋ</rt></ruby>，<ruby>溶<rt>ㄖㄨㄥˊ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>水<rt>ㄕㄨㄟˇ</rt></ruby><ruby>變<rt>ㄅㄧㄢˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>碳<rt>ㄊㄢˋ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby>。"},
+{ n:"Cu", d:" [ <ruby>銅<rt>ㄊㄨㄥˊ</rt></ruby>] <br><ruby>導<rt>ㄉㄠˇ</rt></ruby><ruby>電<rt>ㄉㄧㄢˋ</rt></ruby><ruby>很<rt>ㄏㄣˇ</rt></ruby><ruby>強<rt>ㄑㄧㄤˊ</rt></ruby>，<ruby>常<rt>ㄔㄤˊ</rt></ruby><ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>來<rt>ㄌㄞˊ</rt></ruby><ruby>做<rt>ㄗㄨㄛˋ</rt></ruby><ruby>電<rt>ㄉㄧㄢˋ</rt></ruby><ruby>線<rt>ㄒㄧㄢˋ</rt></ruby>。"},
+{ n:"Fe", d:" [ <ruby>鐵<rt>ㄊㄧㄝˇ</rt></ruby>] <br><ruby>堅<rt>ㄐㄧㄢ</rt></ruby><ruby>固<rt>ㄍㄨˋ</rt></ruby><ruby>金<rt>ㄐㄧㄣ</rt></ruby><ruby>屬<rt>ㄕㄨˇ</rt></ruby>，<ruby>會<rt>ㄏㄨㄟˋ</rt></ruby><ruby>被<rt>ㄅㄟˋ</rt></ruby><ruby>磁<rt>ㄘˊ</rt></ruby><ruby>鐵<rt>ㄊㄧㄝˇ</rt></ruby><ruby>吸<rt>ㄒㄧ</rt></ruby><ruby>住<rt>ㄓㄨˋ</rt></ruby>。"},
+{ n:"H₂O", d:" [ <ruby>水<rt>ㄕㄨㄟˇ</rt></ruby>] <br><ruby>無<rt>ㄨˊ</rt></ruby><ruby>色<rt>ㄙㄜˋ</rt></ruby><ruby>無<rt>ㄨˊ</rt></ruby><ruby>味<rt>ㄨㄟˋ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>液<rt>ㄧㄝˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>，<ruby>生<rt>ㄕㄥ</rt></ruby><ruby>命<rt>ㄇㄧㄥˋ</rt></ruby><ruby>必<rt>ㄅㄧˋ</rt></ruby><ruby>需<rt>ㄒㄩ</rt></ruby>。"},
+{ n:"HCl", d:" [ <ruby>氯<rt>ㄌㄩˋ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>氫<rt>ㄑㄧㄥ</rt></ruby>] <br><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>性<rt>ㄒㄧㄥˋ</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>，<ruby>溶<rt>ㄖㄨㄥˊ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>水<rt>ㄕㄨㄟˇ</rt></ruby><ruby>變<rt>ㄅㄧㄢˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>鹽<rt>ㄧㄢˊ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby>。"},
+{ n:"K", d:" [ <ruby>鉀<rt>ㄐㄧㄚˇ</rt></ruby>] <br><ruby>軟<rt>ㄖㄨㄢˇ</rt></ruby><ruby>金<rt>ㄐㄧㄣ</rt></ruby><ruby>屬<rt>ㄕㄨˇ</rt></ruby>，<ruby>身<rt>ㄕㄣ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby><ruby>重<rt>ㄓㄨㄥˋ</rt></ruby><ruby>要<rt>ㄧㄠˋ</rt></ruby><ruby>電<rt>ㄉㄧㄢˋ</rt></ruby><ruby>解<rt>ㄐㄧㄝˇ</rt></ruby><ruby>質<rt>ㄓˊ</rt></ruby><ruby>之<rt>ㄓ</rt></ruby><ruby>一<rt>ㄧ</rt></ruby>。"},
+{ n:"N₂", d:" [ <ruby>氮<rt>ㄉㄢˋ</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby>] <br><ruby>空<rt>ㄎㄨㄥ</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby><ruby>含<rt>ㄏㄢˊ</rt></ruby><ruby>量<rt>ㄌㄧㄤˋ</rt></ruby><ruby>最<rt>ㄗㄨㄟˋ</rt></ruby><ruby>多<rt>ㄉㄨㄛ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>，<ruby>不<rt>ㄅㄨˋ</rt></ruby><ruby>愛<rt>ㄞˋ</rt></ruby><ruby>反<rt>ㄈㄢˇ</rt></ruby><ruby>應<rt>ㄧㄥˋ</rt></ruby>。"},
+{ n:"NaCl", d:" [ <ruby>氯<rt>ㄌㄩˋ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>鈉<rt>ㄋㄚˋ</rt></ruby>] <br><ruby>由<rt>ㄧㄡˊ</rt></ruby><ruby>氯<rt>ㄌㄩˋ</rt></ruby><ruby>元<rt>ㄩㄢˊ</rt></ruby><ruby>素<rt>ㄙㄨˋ</rt></ruby><ruby>及<rt>ㄐㄧˊ</rt></ruby><ruby>鈉<rt>ㄋㄚˋ</rt></ruby><ruby>元<rt>ㄩㄢˊ</rt></ruby><ruby>素<rt>ㄙㄨˋ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>合<rt>ㄏㄜˊ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>產<rt>ㄔㄢˇ</rt></ruby><ruby>物<rt>ㄨˋ</rt></ruby>，<ruby>嚐<rt>ㄔㄤˊ</rt></ruby><ruby>起<rt>ㄑㄧˇ</rt></ruby><ruby>來<rt>ㄌㄞˊ</rt></ruby><ruby>有<rt>ㄧㄡˇ</rt></ruby><ruby>鹹<rt>ㄒㄧㄢˊ</rt></ruby><ruby>味<rt>ㄨㄟˋ</rt></ruby>。"},
+{ n:"NaHCO₃", d:" [ <ruby>碳<rt>ㄊㄢˋ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>氫<rt>ㄑㄧㄥ</rt></ruby><ruby>鈉<rt>ㄋㄚˋ</rt></ruby>] <br><ruby>又<rt>ㄧㄡˋ</rt></ruby><ruby>稱<rt>ㄔㄥ</rt></ruby><ruby>為<rt>ㄨㄟˊ</rt></ruby><ruby>小<rt>ㄒㄧㄠˇ</rt></ruby><ruby>蘇<rt>ㄙㄨ</rt></ruby><ruby>打<rt>ㄉㄚˇ</rt></ruby>，<ruby>遇<rt>ㄩˋ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>會<rt>ㄏㄨㄟˋ</rt></ruby><ruby>起<rt>ㄑㄧˇ</rt></ruby><ruby>泡<rt>ㄆㄠˋ</rt></ruby>。"},
+{ n:"O₂", d:" [ <ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby>] <br><ruby>讓<rt>ㄖㄤˋ</rt></ruby><ruby>人<rt>ㄖㄣˊ</rt></ruby><ruby>呼<rt>ㄏㄨ</rt></ruby><ruby>吸<rt>ㄒㄧ</rt></ruby>、<ruby>幫<rt>ㄅㄤ</rt></ruby><ruby>助<rt>ㄓㄨˋ</rt></ruby><ruby>燃<rt>ㄖㄢˊ</rt></ruby><ruby>燒<rt>ㄕㄠ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby><ruby>體<rt>ㄊㄧˇ</rt></ruby>。"},
+{ n:"SiO₂", d:" [ <ruby>二<rt>ㄦˋ</rt></ruby><ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>矽<rt>ㄒㄧˋ</rt></ruby>] <br><ruby>沙<rt>ㄕㄚ</rt></ruby><ruby>子<rt>ㄗ˙</rt></ruby><ruby>和<rt>ㄏㄜˊ</rt></ruby><ruby>玻<rt>ㄅㄛ</rt></ruby><ruby>璃<rt>ㄌㄧˊ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>重<rt>ㄓㄨㄥˋ</rt></ruby><ruby>要<rt>ㄧㄠˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>分<rt>ㄈㄣˋ</rt></ruby>。"},
+{ n:"SO₂", d:" [ <ruby>二<rt>ㄦˋ</rt></ruby><ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>硫<rt>ㄌㄧㄡˊ</rt></ruby>] <br><ruby>具<rt>ㄐㄩˋ</rt></ruby><ruby>有<rt>ㄧㄡˇ</rt></ruby><ruby>刺<rt>ㄘˋ</rt></ruby><ruby>鼻<rt>ㄅㄧˊ</rt></ruby><ruby>氣<rt>ㄑㄧˋ</rt></ruby><ruby>味<rt>ㄨㄟˋ</rt></ruby>，<ruby>溶<rt>ㄖㄨㄥˊ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>水<rt>ㄕㄨㄟˇ</rt></ruby><ruby>變<rt>ㄅㄧㄢˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>硫<rt>ㄌㄧㄡˊ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby>。"},
+{ n:"TiO₂", d:" [ <ruby>二<rt>ㄦˋ</rt></ruby><ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>鈦<rt>ㄊㄞˋ</rt></ruby>] <br><ruby>很<rt>ㄏㄣˇ</rt></ruby><ruby>白<rt>ㄅㄞˊ</rt></ruby><ruby>的<rt>ㄉㄜ˙</rt></ruby><ruby>粉<rt>ㄈㄣˇ</rt></ruby><ruby>末<rt>ㄇㄛˋ</rt></ruby>，<ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>顏<rt>ㄧㄢˊ</rt></ruby><ruby>料<rt>ㄌㄧㄠˋ</rt></ruby><ruby>或<rt>ㄏㄨㄛˋ</rt></ruby><ruby>防<rt>ㄈㄤˊ</rt></ruby><ruby>曬<rt>ㄕㄞˋ</rt></ruby><ruby>成<rt>ㄔㄥˊ</rt></ruby><ruby>份<rt>ㄈㄣˋ</rt></ruby>。"},
+{ n:"ZnO", d:" [ <ruby>氧<rt>ㄧㄤˇ</rt></ruby><ruby>化<rt>ㄏㄨㄚˋ</rt></ruby><ruby>鋅<rt>ㄒㄧㄣ</rt></ruby>] <br><ruby>白<rt>ㄅㄞˊ</rt></ruby><ruby>色<rt>ㄙㄜˋ</rt></ruby><ruby>粉<rt>ㄈㄣˇ</rt></ruby><ruby>末<rt>ㄇㄛˋ</rt></ruby>，<ruby>難<rt>ㄋㄢˊ</rt></ruby><ruby>溶<rt>ㄖㄨㄥˊ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>水<rt>ㄕㄨㄟˇ</rt></ruby><ruby>但<rt>ㄉㄢˋ</rt></ruby><ruby>易<rt>ㄧˋ</rt></ruby><ruby>溶<rt>ㄖㄨㄥˊ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>酸<rt>ㄙㄨㄢ</rt></ruby><ruby>及<rt>ㄐㄧˊ</rt></ruby><ruby>強<rt>ㄑㄧㄤˊ</rt></ruby><ruby>鹼<rt>ㄐㄧㄢˇ</rt></ruby>，<ruby>多<rt>ㄉㄨㄛ</rt></ruby><ruby>用<rt>ㄩㄥˋ</rt></ruby><ruby>於<rt>ㄩˊ</rt></ruby><ruby>醫<rt>ㄧ</rt></ruby><ruby>藥<rt>ㄧㄠˋ</rt></ruby><ruby>護<rt>ㄏㄨˋ</rt></ruby><ruby>膚<rt>ㄈㄨ</rt></ruby><ruby>與<rt>ㄩˇ</rt></ruby><ruby>防<rt>ㄈㄤˊ</rt></ruby><ruby>曬<rt>ㄕㄞˋ</rt></ruby><ruby>產<rt>ㄔㄢˇ</rt></ruby><ruby>品<rt>ㄆㄧㄣˇ</rt></ruby>。"}
+];
+
+/* ========================= QR 觸發：強制顯示指定分子（5 秒後回到預設輪播） =========================
+   規則：
+   - 掃到 "11a" -> 立刻清除當前元素球/描述，顯示 H₂O + 描述，5 秒後回到原本輪播
+   - 掃到 "11d" -> 立刻清除當前元素球/描述，顯示 H₂SO₄ + 描述，5 秒後回到原本輪播
+   - 為避免同一張 QR 一直被掃到造成不停重置，會有短暫冷卻
+============================================================================================== */
+
+let __playTimeouts = [];
+function __setPlayTimeout(fn, ms){
+    const id = setTimeout(fn, ms);
+    __playTimeouts.push(id);
+    return id;
+}
+function clearPlayTimers(){
+    for(const id of __playTimeouts) clearTimeout(id);
+    __playTimeouts = [];
+}
+
+function __hardClearScene(){
+    const area = document.getElementById("moleculeArea");
+    const info = document.getElementById("info");
+    const ansPanel = document.getElementById("ansPanel");
+
+    if (area) area.innerHTML = "";
+    const bondSvg = document.getElementById("bondLayer");
+    if (bondSvg) { bondSvg.innerHTML = ""; bondSvg.style.opacity = 0; }
+    stopBondRAF();
+
+    if (info) info.style.opacity = 0;
+    if (ansPanel) {
+        ansPanel.style.opacity = 0;
+        ansPanel.style.transform = "translateY(10px) scale(0.98)";
+        const peek = ansPanel.querySelector("#peekImg");
+        if (peek) {
+            peek.style.opacity = 0;
+            peek.removeAttribute("src");
+        }
+    }
+}
+
+function __findDataByFormula(formulaStr){
+    return rawData.find(x => String(x.n).trim() === String(formulaStr).trim()) || null;
+}
+
+let __overrideActive = false;
+let __overrideTimer = null;
+let __resumeIndex = 0;
+let __overrideFormula = "";
+let __qrLockUntil = 0;
+
+function showFormulaTemporarily(formulaStr, ms = 5000){
+    const data = __findDataByFormula(formulaStr);
+    if (!data) return;
+
+    const now = performance.now();
+
+    // 同一張 QR 反覆掃描時，不要一直重置（避免永遠回不去輪播）
+    if (__overrideActive && __overrideFormula === formulaStr && now < __qrLockUntil) {
+        return;
+    }
+
+    // 第一次進入 override 時，記下當下輪播位置
+    if (!__overrideActive) {
+        __resumeIndex = index;
+    }
+
+    __overrideActive = true;
+    __overrideFormula = formulaStr;
+    __qrLockUntil = now + 1200;
+
+    // 立即清除當前元素球與描述（包含原本輪播的計時器）
+    clearPlayTimers();
+    __hardClearScene();
+
+    // 立即顯示指定分子（不推進 index、不自動 next）
+    // 讓它顯示約 5 秒；末段略做淡出比較不突兀
+    play({
+        data,
+        autoNext: false,
+        advanceIndex: false,
+        showDelayMs: 250,
+        fadeOutMs: Math.max(0, ms - 600)
+    });
+
+    // ms 後回到原本輪播
+    clearTimeout(__overrideTimer);
+    __overrideTimer = setTimeout(() => {
+        __overrideActive = false;
+        __overrideFormula = "";
+
+        // 回到「原本輪播位置」繼續播放（會從該分子重新開始顯示）
+        index = __resumeIndex;
+        clearPlayTimers();
+        __hardClearScene();
+        play();
+    }, ms);
+}
+
+/* ========================= QR 持續掃描（參考 scan game.html：jsQR） ========================= */
+const __qrVideo = document.getElementById('qrVideo');
+const __qrCanvas = document.getElementById('qrCanvas');
+const __qrCtx = __qrCanvas ? __qrCanvas.getContext('2d') : null;
+
+let __qrStream = null;
+let __useSelfCamForQR = false;
+
+let __lastScanTime = 0;
+let __scanPausedUntil = 0; // 掃描成功後，暫停掃描到這個時間點（ms timestamp from rAF）
+const __SCAN_INTERVAL = 2000; // ms（每 2 秒掃描一次）
+
+const __qrMap = {
+    "11a": "H₂O",
+    "11d": "H₂SO₄"
+};
+
+async function startQrScanner(){
+    // 先嘗試啟動「後置鏡頭」掃 QR；若裝置不允許同時開兩顆鏡頭，退回用前置鏡頭畫面做掃描
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        throw new Error('Browser does not support getUserMedia');
+    }
+
+    try{
+        __qrStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+        });
+        if (__qrVideo) {
+            __qrVideo.srcObject = __qrStream;
+            try{ await __qrVideo.play(); }catch(e){}
+        }
+    }catch(e){
+        // fallback：用前置鏡頭的 video 當掃描來源（若你把 QR 放在前鏡頭前面也能觸發）
+        if (CAMERA_UI_CONFIG.ALLOW_SELF_CAM_QR_FALLBACK && __selfCam && __selfCam.srcObject) {
+            __useSelfCamForQR = true;
+            console.warn('後置鏡頭啟動失敗，改用前置鏡頭做 QR 掃描（若要掃 QR，請把 QR 對準前鏡頭）。', e);
+        } else {
+            console.warn('後置鏡頭啟動失敗，且目前未啟用前置鏡頭 QR fallback。', e);
+        }
+    }
+
+    requestAnimationFrame(qrScanLoop);
+}
+
+function qrScanLoop(ts){
+    // 掃描成功後 5 秒內不再進行任何掃描
+    if (ts < __scanPausedUntil) {
+        requestAnimationFrame(qrScanLoop);
+        return;
+    }
+    const srcVideo = (__useSelfCamForQR ? __selfCam : __qrVideo);
+    if (srcVideo && __qrCtx && window.jsQR) {
+        if (srcVideo.readyState === srcVideo.HAVE_ENOUGH_DATA) {
+            if (ts - __lastScanTime >= __SCAN_INTERVAL) {
+                __lastScanTime = ts;
+
+                const w = srcVideo.videoWidth || 0;
+                const h = srcVideo.videoHeight || 0;
+
+                if (w > 0 && h > 0) {
+                    if (__qrCanvas.width !== w || __qrCanvas.height !== h) {
+                        __qrCanvas.width = w;
+                        __qrCanvas.height = h;
+                    }
+
+                    __qrCtx.drawImage(srcVideo, 0, 0, w, h);
+                    const imageData = __qrCtx.getImageData(0, 0, w, h);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code && code.data) {
+                        const value = String(code.data).trim();
+                        const formula = __qrMap[value];
+                        if (formula) {
+                            // 成功掃描後：5 秒內不再掃描（避免重複觸發）
+                            __scanPausedUntil = ts + 5000;
+                            showFormulaTemporarily(formula, 5000);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    requestAnimationFrame(qrScanLoop);
+}
+
+// 離開頁面時關閉 QR 鏡頭
+window.addEventListener('beforeunload', () => {
+    try{
+        if(__qrStream){
+            __qrStream.getTracks().forEach(t => t.stop());
+            __qrStream = null;
+        }
+    }catch(e){}
+});
+/* ================================================================================================= */
+
+// ---- Answer images (random, no repeat with previous 2, robust loading) ----
+// Put an1~an6 images in the SAME folder as this HTML (any of: .png/.jpg/.jpeg/.webp)
+// You may also name them with extensions explicitly; both are supported.
+/* ------------------ Left answer images (an1~an6) ------------------
+   - Randomly pick 1 image when formula/description shows
+   - Avoid repeating with the last 2 picks (by base name, not URL)
+   - Robust loading on file:// with case-sensitive extensions:
+     tries png/PNG/Png + jpg/JPG/Jpg + jpeg/JPEG/Jpeg + webp/WEBP/Webp
+------------------------------------------------------------------- */
+const answerBases = ["an1","an2","an3","an4","an5","an6"];
+const peekBases  = ["scanspeek1","scanspeek2","scanspeek3","scanspeek4","scanspeek5","scanspeek6"];
+let lastPeekBase = "";
+function pickPeekBase(){
+    // Avoid repeating the same peek twice in a row if possible
+    let candidates = peekBases.filter(b => b !== lastPeekBase);
+    if (candidates.length === 0) candidates = [...peekBases];
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    lastPeekBase = pick;
+    return pick;
+}
+
+// Place scanspeek image between the current an-image (ansImg/ansPanel) and bg1.
+function __clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
+function positionPeekBetween(){
+    const peek = document.getElementById('peekImg');
+    if (!peek) return;
+
+    // Only position when it's actually visible/active
+    if (peek.style.opacity === '0' || !peek.getAttribute('src')) return;
+
+    const ansImg = document.getElementById('ansImg');
+    const ansPanel = document.getElementById('ansPanel');
+    const bg1 = document.getElementById('bg1Layer');
+    if (!ansPanel || !bg1) return;
+
+    const aRect = (ansImg && ansImg.getBoundingClientRect().width > 0)
+        ? ansImg.getBoundingClientRect()
+        : ansPanel.getBoundingClientRect();
+    const bRect = bg1.getBoundingClientRect();
+
+    // Midpoint between an-image's right edge and bg1's left edge
+    let x = (aRect.right + bRect.left) / 2;
+    let y = aRect.top + aRect.height / 2;
+
+    // If they overlap a lot (or bg1 is to the left), bias slightly to the right of an-image
+    const gap = bRect.left - aRect.right;
+    if (!isFinite(x) || gap < 40) x = aRect.right + 70;
+    if (!isFinite(y)) y = aRect.top + aRect.height / 2;
+
+
+    // 往左上方推移（約 1.5 顆球體距離），允許局部蓋到 an1~6
+    const sampleBall = document.querySelector('.atom');
+    const ballSize = (sampleBall && sampleBall.getBoundingClientRect().width) ? sampleBall.getBoundingClientRect().width : 100;
+    const offset = 1.5 * ballSize;
+    x -= offset;
+    y -= offset * 0.7;
+
+    // Clamp inside viewport based on peek size
+    const pRect = peek.getBoundingClientRect();
+    const halfW = Math.max(60, pRect.width / 2);
+    const halfH = Math.max(60, pRect.height / 2);
+    const margin = 10;
+
+    x = __clamp(x, halfW + margin, window.innerWidth - halfW - margin);
+    y = __clamp(y, halfH + margin, window.innerHeight - halfH - margin);
+
+    peek.style.left = `${x}px`;
+    peek.style.top = `${y}px`;
+    peek.style.transform = 'translate(-50%, -50%)';
+}
+
+window.addEventListener('resize', () => {
+    if (__overrideActive) requestAnimationFrame(positionPeekBetween);
+});
+
+const answerExts  = ["png","jpg","jpeg","webp"];
+let lastAnswerBases = []; // keep last 2 picked bases
+
+function buildCandidateUrls(base){
+    // base without extension -> try many case variants for extension
+    // IMPORTANT: On Windows file://, folder names may contain spaces;
+    // using relative URL is fine as long as files are in the same folder.
+    const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+
+    // If base already has extension, just try a few case variants
+    if (/\.[a-zA-Z0-9]+$/.test(base)) {
+        return uniq([base, base.toLowerCase(), base.toUpperCase()]);
+    }
+
+    // We'll keep base itself as-is (an1), and also try lower/upper (AN1 etc.)
+    const baseVariants = uniq([base, base.toLowerCase(), base.toUpperCase()]);
+
+    const out = [];
+    for (const b of baseVariants){
+        for (const ext of answerExts){
+            const e = String(ext);
+            // common variants: png / PNG / Png
+            const variants = uniq([
+                e,
+                e.toLowerCase(),
+                e.toUpperCase(),
+                e.charAt(0).toUpperCase() + e.slice(1).toLowerCase()
+            ]);
+            for (const v of variants){
+                out.push(`${b}.${v}`);
+            }
+        }
+    }
+    return uniq(out);
+}
+
+function pickAnswerBase(){
+    // Avoid last 2 if possible
+    const exclude = new Set(lastAnswerBases);
+    let candidates = answerBases.filter(b => !exclude.has(b));
+    if (candidates.length === 0) candidates = [...answerBases];
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    lastAnswerBases = [pick, ...lastAnswerBases].slice(0,2);
+    return pick;
+}
+
+function setImageWithFallback(imgEl, base, onReady){
+    if (!imgEl || !base) return;
+
+    const candidates = buildCandidateUrls(base);
+    let k = 0;
+
+    const tryNext = () => {
+        if (k >= candidates.length) {
+            // all failed -> hide
+            if (imgEl.parentElement) imgEl.parentElement.style.display = "none";
+            return;
+        }
+        const url = candidates[k++];
+        const testImg = new Image();
+        testImg.onload = () => {
+            imgEl.src = url;
+            if (imgEl.parentElement) imgEl.parentElement.style.display = "block";
+            if (typeof onReady === "function") onReady(url);
+        };
+        testImg.onerror = () => {
+            tryNext();
+        };
+
+        // IMPORTANT: do NOT append cache-bust query on file:// to avoid weird resolution
+        testImg.src = (location.protocol === "file:") ? url : (url + (url.includes("?") ? "&" : "?") + "v=" + Date.now());
+    };
+
+    tryNext();
+}
+
+/* ------------------ Ball texture (ball.*) ------------------
+   Put ball.png / ball.PNG (or jpg/jpeg/webp) in the SAME folder as this HTML.
+   We'll resolve the first file that exists (case-insensitive extension),
+   and expose it to CSS via :root{ --ballTexture: url("...") }.
+----------------------------------------------------------- */
+function resolveBallTexture(){
+    const candidates = buildCandidateUrls("ball");
+    let k = 0;
+
+    const tryNext = () => {
+        if (k >= candidates.length) {
+            // If not found, keep default gradient only.
+            document.documentElement.style.setProperty("--ballTexture", "none");
+            return;
+        }
+        const url = candidates[k++];
+        const testImg = new Image();
+        testImg.onload = () => {
+            // Set CSS variable as url("...") so CSS can use it in background-image.
+            document.documentElement.style.setProperty("--ballTexture", `url("${url}")`);
+        };
+        testImg.onerror = () => tryNext();
+
+        // Same rule: don't append cache-bust on file://
+        testImg.src = (location.protocol === "file:") ? url : (url + (url.includes("?") ? "&" : "?") + "v=" + Date.now());
+    };
+
+    tryNext();
+}
+
+// Resolve ball texture ASAP
+resolveBallTexture();
+
+function parseFormula(formula) {
+    // 1) 將 Unicode 下標數字(₀-₉)轉成一般數字，避免 H₂O 被當成 H1O1
+    const subMap = { '₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9' };
+    const f = String(formula)
+        .replace(/[₀₁₂₃₄₅₆₇₈₉]/g, ch => subMap[ch] ?? ch)
+        .replace(/\s+/g, ''); // 移除空白 (例如 "N₂ + O₂ + Ar")
+
+    // 2) 解析支援：元素符號、一般數字、括號倍數、混合物加號(+)
+    //    也容忍像 CxHyOzNwSw 這種變數形式：遇到元素後接小寫字母(x/y/z...) 時，視為「未定係數」→ 預設 1
+    function readNumber(str, i) {
+        let num = '';
+        while (i < str.length && /[0-9]/.test(str[i])) {
+            num += str[i++];
+        }
+        return [num ? parseInt(num, 10) : 1, i];
+    }
+
+    function parseSegment(str, i = 0, stopChar = null) {
+        const out = [];
+        while (i < str.length) {
+            const ch = str[i];
+
+            if (stopChar && ch === stopChar) break;
+
+            // 分隔符號：混合物加號、點號(例如水合物)、逗號等 → 略過
+            if (ch === '+' || ch === '·' || ch === '.' || ch === ',') { i++; continue; }
+
+            // 括號群組 (OH)2
+            if (ch === '(') {
+                const [inner, nextI] = parseSegment(str, i + 1, ')');
+                i = nextI + 1; // 跳過 ')'
+                const [mult, afterMult] = readNumber(str, i);
+                i = afterMult;
+                for (let k = 0; k < mult; k++) out.push(...inner);
+                continue;
+            }
+
+            // 元素符號：大寫 + 可選小寫 (Na / Cl / Fe ...)
+            if (/[A-Z]/.test(ch)) {
+                let symbol = ch;
+                i++;
+
+                if (i < str.length && /[a-z]/.test(str[i])) {
+                    symbol += str[i];
+                    i++;
+                }
+
+                // 讀取一般數字倍數
+                let [count, afterNum] = readNumber(str, i);
+
+                // 若沒有數字倍數，且後面接的是小寫字母(不是下一個元素的大寫)，視為變數係數(CxHy...) → 吃掉變數並將 count 視為 1
+                if (count === 1 && afterNum === i && i < str.length && /[a-z]/.test(str[i])) {
+                    while (i < str.length && /[a-z]/.test(str[i])) i++;
+                    afterNum = i;
+                    count = 1;
+                } else {
+                    i = afterNum;
+                }
+
+                for (let k = 0; k < count; k++) out.push(symbol);
+                continue;
+            }
+
+            // 其他字元(例如箭頭、電荷符號等) → 略過
+            i++;
+        }
+        return [out, i];
+    }
+
+    return parseSegment(f, 0, null)[0];
+}
+
+// ===== Molecular layout presets + bond drawing =====
+
+// Skeletal/framework drawings often omit explicit hydrogens.
+// You asked to show the "H" balls for glucose/sucrose, so we keep a toggle.
+// Press the "H" key to toggle hydrogen visibility.
+function normalizeFormulaKey(formula){
+    const subMap = { '₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9' };
+    return String(formula)
+        .replace(/[₀₁₂₃₄₅₆₇₈₉]/g, ch => subMap[ch] ?? ch)
+        .replace(/\s+/g,'')
+        .replace(/[\u00B7·]/g,''); // remove dot hydrates for key
+}
+
+// Return a molecule preset (2D) if known; else null.
+// Output: { atoms:[{symbol, dx, dy, role}], bonds:[[a,b,type]] }
+// dx/dy are in "units" multiplied by (atomSize*0.95)
+
+// Build a simplified sucrose (C12H22O11) 2D schematic:
+// - Left: glucose (pyranose ring) ; Right: fructose (furanose ring)
+// - One glycosidic oxygen bridge between the rings
+// This is a teaching/visual layout (not stereochemically exact), but connectivity and stoichiometry match C12H22O11.
+function buildSucrosePreset(){
+    // Skeletal / framework-style 2D Haworth-like layout (teaching diagram)
+    // Visible atoms: 12 C + 11 O (no explicit H balls). The remaining 22 H are implicit/hidden.
+    const atoms = [];
+    const bonds = [];
+    const add = (symbol, dx, dy, hidden=false) => (atoms.push({symbol, dx, dy, hidden}), atoms.length - 1);
+
+    // ---------- Left ring: glucose pyranose (6-member, one O + 5C) ----------
+    // Approximate chair-ish projection (like typical textbook)
+    const L = {};
+    L.C1 = add("C", -3.0,  0.6);
+    L.C2 = add("C", -2.0,  1.3);
+    L.C3 = add("C", -1.0,  0.8);
+    L.C4 = add("C", -1.2, -0.4);
+    L.C5 = add("C", -2.3, -0.9);
+    L.O5 = add("O", -3.2, -0.3);
+
+    bonds.push([L.C1,L.C2,"single"],[L.C2,L.C3,"single"],[L.C3,L.C4,"single"],[L.C4,L.C5,"single"],[L.C5,L.O5,"single"],[L.O5,L.C1,"single"]);
+
+    // Exocyclic C6 (CH2OH) up-left
+    L.C6 = add("C", -2.4,  2.4);
+    bonds.push([L.C2, L.C6, "single"]); // attach near C2/upper edge for visual CH2OH
+
+    // ---------- Right ring: fructose furanose (5-member, one O + 4C) ----------
+    const R = {};
+    R.C2 = add("C",  1.6,  0.7);  // anomeric carbon (links to bridge O)
+    R.C3 = add("C",  2.6,  1.3);
+    R.C4 = add("C",  3.5,  0.6);
+    R.C5 = add("C",  2.9, -0.6);
+    R.O5 = add("O",  1.9, -0.2);
+
+    bonds.push([R.C2,R.C3,"single"],[R.C3,R.C4,"single"],[R.C4,R.C5,"single"],[R.C5,R.O5,"single"],[R.O5,R.C2,"single"]);
+
+    // Fructose has two CH2OH groups (C1' and C6')
+    R.C1 = add("C",  0.8,  1.6);
+    bonds.push([R.C2, R.C1, "single"]);
+    R.C6 = add("C",  3.9, -1.6);
+    bonds.push([R.C5, R.C6, "single"]);
+
+    // ---------- Glycosidic bridge oxygen between L.C1 and R.C2 ----------
+    const Obridge = add("O", -0.7,  0.2);
+    bonds.push([L.C1, Obridge, "single"], [Obridge, R.C2, "single"]);
+
+    // ---------- Hydroxyl oxygens (8 O) on rings / side chains ----------
+    // We draw only the O in OH (framework style). H are implicit.
+    const addOH_O = (cIdx, ox, oy) => {
+        const o = add("O", ox, oy);
+        bonds.push([cIdx, o, "single"]);
+    };
+
+    // glucose OH (rough positions)
+    addOH_O(L.C1, -3.9,  1.2);
+    addOH_O(L.C3, -0.2,  1.2);
+    addOH_O(L.C4, -0.4, -1.1);
+    addOH_O(L.C5, -2.2, -2.1);
+    addOH_O(L.C6, -3.5,  3.0);
+
+    // fructose OH (rough positions)
+    addOH_O(R.C3,  2.2,  2.4);
+    addOH_O(R.C4,  4.6,  0.9);
+    addOH_O(R.C6,  5.1, -2.0);
+
+        return { atoms, bonds };
+}
+
+// --- Expand skeleton presets to explicit-H presets (no hiding). ---
+function parseFormulaCounts(formula){
+    // Accept subscripts like H₂O -> convert to plain digits already in data.n for this project, but be safe.
+    const subMap = {'₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9'};
+    const f = (formula||"").replace(/[₀-₉]/g, m=>subMap[m]||m);
+    const counts = {};
+    const reEl = /([A-Z][a-z]?)(\d*)/g;
+    let m;
+    while((m=reEl.exec(f))){
+        const el=m[1];
+        const n=m[2]?parseInt(m[2],10):1;
+        counts[el]=(counts[el]||0)+n;
+    }
+    return counts;
+}
+function bondOrder(type){
+    if(type==="double") return 2;
+    if(type==="triple") return 3;
+    return 1; // single / ionic / default
+}
+function typicalValence(sym){
+    switch(sym){
+        case "C": return 4;
+        case "N": return 3;
+        case "O": return 2;
+        case "H": return 1;
+        case "Cl": return 1;
+        case "Na": return 1;
+        case "K": return 1;
+        case "Ca": return 2;
+        case "S": return 6; // for H2SO4 etc. (we won't over-hydrogenate if already satisfied)
+        default: return 4;
+    }
+}
+function addExplicitHydrogensToMatch(atoms, bonds, formulaCounts){
+    const targetH = (formulaCounts && formulaCounts.H) ? formulaCounts.H : 0;
+    if(targetH<=0) return {atoms,bonds};
+
+    // compute current bond order sum per atom
+    const orderSum = new Array(atoms.length).fill(0);
+    const neighborCount = new Array(atoms.length).fill(0);
+    bonds.forEach(([a,b,t])=>{
+        const o=bondOrder(t);
+        orderSum[a]+=o; orderSum[b]+=o;
+        neighborCount[a]++; neighborCount[b]++;
+    });
+
+    const center = atoms.reduce((acc,a)=>{
+        if(a.symbol!=="H"){ acc.x+=a.dx; acc.y+=a.dy; acc.n++; }
+        return acc;
+    },{x:0,y:0,n:0});
+    const cx = center.n? center.x/center.n : 0;
+    const cy = center.n? center.y/center.n : 0;
+
+    const countHNow = ()=>atoms.reduce((c,a)=>c+(a.symbol==="H"),0);
+    const angles = [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
+
+    let hNow = countHNow();
+    if(hNow>targetH){
+        // If preset already has more H than formula, do nothing (avoid deleting).
+        return {atoms,bonds};
+    }
+
+    // helper to place H around parent
+    const placedPerParent = new Map();
+    function placeH(parentIdx){
+        const p = atoms[parentIdx];
+        const used = placedPerParent.get(parentIdx)||0;
+        placedPerParent.set(parentIdx, used+1);
+
+        // outward direction from center; fallback angle list
+        let vx = p.dx - cx, vy = p.dy - cy;
+        let baseAng = Math.atan2(vy, vx);
+        if(!isFinite(baseAng)) baseAng = 0;
+        const jitter = (used%2===0?1:-1) * (0.55 + 0.15*Math.floor(used/2));
+        const ang = baseAng + jitter;
+        const r = 1.25;
+        const dx = p.dx + Math.cos(ang)*r;
+        const dy = p.dy + Math.sin(ang)*r;
+        atoms.push({symbol:"H", dx, dy, hidden:false});
+        const hIdx = atoms.length-1;
+        bonds.push([parentIdx, hIdx, "single"]);
+        orderSum[parentIdx]+=1;
+        neighborCount[parentIdx]+=1;
+        orderSum[hIdx]=1;
+        neighborCount[hIdx]=1;
+        return true;
+    }
+
+    // priority pass: O with single bond (OH), then N, then C, then others
+    const priority = (sym)=>{
+        if(sym==="O") return 0;
+        if(sym==="N") return 1;
+        if(sym==="C") return 2;
+        return 3;
+    };
+
+    // iterate until H satisfied or no progress
+    let guard=0;
+    while(hNow < targetH && guard < 5000){
+        guard++;
+        let progressed=false;
+
+        // sort candidate indices by priority and lower filled fraction first
+        const idxs = atoms.map((a,i)=>({a,i}))
+            .filter(o=>o.a.symbol!=="H")
+            .sort((p,q)=>{
+                const pp=priority(p.a.symbol), qp=priority(q.a.symbol);
+                if(pp!==qp) return pp-qp;
+                const pv=typicalValence(p.a.symbol), qv=typicalValence(q.a.symbol);
+                const pf=(orderSum[p.i]/Math.max(1,pv)), qf=(orderSum[q.i]/Math.max(1,qv));
+                return pf-qf;
+            })
+            .map(o=>o.i);
+
+        for(const i of idxs){
+            if(hNow>=targetH) break;
+            const sym = atoms[i].symbol;
+            const v = typicalValence(sym);
+            const need = Math.max(0, v - orderSum[i]);
+            if(need<=0) continue;
+            // For oxygen: only add at most 1 H if it already has one heavy bond (to make OH)
+            if(sym==="O"){
+                if(orderSum[i]===1){
+                    placeH(i); hNow++; progressed=true;
+                }
+            } else {
+                // add H(s) but don't exceed target
+                const addN = Math.min(need, targetH - hNow);
+                for(let k=0;k<addN;k++){
+                    placeH(i); hNow++; progressed=true;
+                    if(hNow>=targetH) break;
+                }
+            }
+        }
+
+        if(!progressed) break;
+    }
+    return {atoms,bonds};
+}
+
+function getMoleculePreset(key){
+    switch(key){
+                case "C6H12O6":
+            // Glucose (skeletal / Haworth-like framework). Show C/O framework + OH oxygens, hide H.
+            // Visible: 6 C + 6 O. Hidden: 12 H.
+            return {
+                atoms: (function(){
+                    const atoms=[];
+                    const add=(symbol,dx,dy,hidden=false)=>{ atoms.push({symbol,dx,dy,hidden}); return atoms.length-1; };
+
+                    const R={};
+                    // ring (pyranose)
+                    R.C1 = add("C", -1.8,  0.6);
+                    R.C2 = add("C", -0.8,  1.3);
+                    R.C3 = add("C",  0.2,  0.8);
+                    R.C4 = add("C",  0.0, -0.4);
+                    R.C5 = add("C", -1.1, -0.9);
+                    R.O5 = add("O", -2.0, -0.3);
+                    // exocyclic C6 (CH2OH)
+                    R.C6 = add("C", -0.9,  2.4);
+
+                    // OH oxygens (5): at C1,C2,C3,C4,C6
+                    R.OH1 = add("O", -2.7,  1.2);
+                    R.OH2 = add("O", -0.6,  2.4);
+                    R.OH3 = add("O",  1.1,  1.2);
+                    R.OH4 = add("O",  1.0, -1.1);
+                    R.OH6 = add("O", -1.9,  3.0);
+
+                                        return atoms;
+                })(),
+                bonds: (function(){
+                    // indices must match above construction order
+                    const b=[];
+                    // ring bonds (C1-C2-C3-C4-C5-O5-C1)
+                    b.push([0,1,"single"],[1,2,"single"],[2,3,"single"],[3,4,"single"],[4,5,"single"],[5,0,"single"]);
+                    // C2-C6
+                    b.push([1,6,"single"]);
+                    // OH bonds
+                    b.push([0,7,"single"],[1,8,"single"],[2,9,"single"],[3,10,"single"],[6,11,"single"]);
+                    return b;
+                })()
+            };
+        case "C12H22O11":
+            return buildSucrosePreset();
+        case "NH3":
+            return {
+                atoms: [
+                    {symbol:"N", dx:0,    dy:0,   role:"center"},
+                    {symbol:"H", dx:0.8,  dy:-1.25, role:"ligand"},
+                    {symbol:"H", dx:-1.45,dy:0.25,  role:"ligand"},
+                    {symbol:"H", dx:1.55, dy:0.85,  role:"ligand"},
+                ],
+                bonds: [[0,1,"single"],[0,2,"single"],[0,3,"single"]]
+            };
+        case "H2O":
+            return {
+                atoms:[
+                    {symbol:"O", dx:0,   dy:0, role:"center"},
+                    {symbol:"H", dx:-1.25, dy:0.9, role:"ligand"},
+                    {symbol:"H", dx:1.25,  dy:0.9, role:"ligand"},
+                ],
+                bonds:[[0,1,"single"],[0,2,"single"]]
+            };
+        case "H2O2":
+            // Hydrogen peroxide: H–O–O–H (single bonds), often drawn as a skewed/open-book shape
+            return {
+                atoms:[
+                    {symbol:"O", dx:-0.9, dy:0.1, role:"center"},
+                    {symbol:"O", dx:0.9,  dy:-0.1, role:"center"},
+                    {symbol:"H", dx:-1.9, dy:-0.9, role:"ligand"},
+                    {symbol:"H", dx:1.9,  dy:0.9,  role:"ligand"},
+                ],
+                bonds:[[0,1,"single"],[0,2,"single"],[1,3,"single"]]
+            };
+        case "CO2":
+            return {
+                atoms:[
+                    {symbol:"O", dx:-1.85, dy:0, role:"ligand"},
+                    {symbol:"C", dx:0,     dy:0, role:"center"},
+                    {symbol:"O", dx:1.85,  dy:0, role:"ligand"},
+                ],
+                bonds:[[1,0,"double"],[1,2,"double"]]
+            };
+        case "CO":
+            return {
+                atoms:[
+                    {symbol:"C", dx:-1.0, dy:0, role:"center"},
+                    {symbol:"O", dx:1.0,  dy:0, role:"ligand"},
+                ],
+                bonds:[[0,1,"triple"]]
+            };
+        case "HCl":
+            return {
+                atoms:[
+                    {symbol:"H",  dx:-1.0, dy:0, role:"ligand"},
+                    {symbol:"Cl", dx:1.0,  dy:0, role:"center"},
+                ],
+                bonds:[[0,1,"single"]]
+            };
+        case "SO2":
+            return {
+                atoms:[
+                    {symbol:"S", dx:0, dy:0, role:"center"},
+                    {symbol:"O", dx:-1.6, dy:0.85, role:"ligand"},
+                    {symbol:"O", dx:1.6,  dy:0.85, role:"ligand"},
+                ],
+                bonds:[[0,1,"double"],[0,2,"double"]]
+            };
+        case "NaOH":
+            // Na+ ... OH- (draw ionic to O), O–H covalent
+            return {
+                atoms:[
+                    {symbol:"Na", dx:-1.8, dy:0.0, role:"center"},
+                    {symbol:"O",  dx:0.2,  dy:0.0, role:"center"},
+                    {symbol:"H",  dx:1.5,  dy:0.0, role:"ligand"},
+                ],
+                bonds:[[0,1,"ionic"],[1,2,"single"]]
+            };
+        case "H2SO4":
+            // HO–S(=O)2–OH (common Lewis depiction)
+            return {
+                atoms:[
+                    {symbol:"S", dx:0, dy:0, role:"center"},
+                    {symbol:"O", dx:-1.4, dy:-1.2, role:"ligand"}, // =O
+                    {symbol:"O", dx: 1.4, dy:-1.2, role:"ligand"}, // =O
+                    {symbol:"O", dx:-1.5, dy: 1.1, role:"ligand"}, // -OH
+                    {symbol:"O", dx: 1.5, dy: 1.1, role:"ligand"}, // -OH
+                    {symbol:"H", dx:-2.4, dy: 1.6, role:"ligand"},
+                    {symbol:"H", dx: 2.4, dy: 1.6, role:"ligand"},
+                ],
+                bonds:[[0,1,"double"],[0,2,"double"],[0,3,"single"],[0,4,"single"],[3,5,"single"],[4,6,"single"]]
+            };
+        case "NaHCO3":
+            // Na+ with bicarbonate HCO3− (planar around C)
+            return {
+                atoms:[
+                    {symbol:"Na", dx:-2.2, dy:0.0, role:"center"}, // 0
+                    {symbol:"C",  dx:0.0,  dy:0.0, role:"center"}, // 1
+                    {symbol:"O",  dx:1.7,  dy:0.0, role:"ligand"}, // 2 =O
+                    {symbol:"O",  dx:-0.9, dy:1.5, role:"ligand"}, // 3 OH
+                    {symbol:"H",  dx:-1.9, dy:2.1, role:"ligand"}, // 4
+                    {symbol:"O",  dx:-0.9, dy:-1.5, role:"ligand"},// 5 O− to Na
+                ],
+                bonds:[
+                    [1,2,"double"],
+                    [1,3,"single"],[3,4,"single"],
+                    [1,5,"single"],[0,5,"ionic"]
+                ]
+            };
+        case "NaCl":
+        case "KCl":
+        case "CaCl2":
+            if(key==="CaCl2"){
+                return {
+                    atoms:[
+                        {symbol:"Ca", dx:0, dy:0, role:"center"},
+                        {symbol:"Cl", dx:-1.6, dy:0.9, role:"ligand"},
+                        {symbol:"Cl", dx:1.6,  dy:0.9, role:"ligand"},
+                    ],
+                    bonds:[[0,1,"ionic"],[0,2,"ionic"]]
+                };
+            }
+            return {
+                atoms:[
+                    {symbol:key.startsWith("Na")?"Na":"K", dx:-1.0, dy:0, role:"center"},
+                    {symbol:"Cl", dx:1.0, dy:0, role:"ligand"},
+                ],
+                bonds:[[0,1,"ionic"]]
+            };
+        default:
+            return null;
+    }
+}
+// Convert preset into absolute target positions in region
+function layoutFromPreset(preset, atomSize, region){
+    const unit = atomSize * 0.95;
+    const cx = region.cx;
+    const cy = region.cy;
+
+    const atoms = preset.atoms.map(a => {
+        const hidden = false;
+        const dx = (a.dx ?? 0);
+        const dy = (a.dy ?? 0);
+
+        return {
+            symbol: a.symbol,
+            hidden,
+            x: cx + dx * unit - atomSize/2,
+            y: cy + dy * unit - atomSize/2
+        };
+    });
+
+    // Filter out any bonds that touch hidden atoms (skeletal mode)
+    const bonds = (preset.bonds || [])
+        .map(b => ({a:b[0], b:b[1], type:b[2] || "single"}))
+        .filter(b => !(atoms[b.a]?.hidden || atoms[b.b]?.hidden));
+
+    return {atoms, bonds};
+}
+
+// ---- Auto-shrink / auto-scale to prevent atom overlap (especially for large formulas/presets) ----
+function __minCenterDistance(points, atomSize){
+    // points: [{x,y}] top-left positions
+    if(!points || points.length < 2) return Infinity;
+    const centers = points.map(p => ({cx: p.x + atomSize/2, cy: p.y + atomSize/2}));
+    let minD = Infinity;
+    for(let i=0;i<centers.length;i++){
+        for(let j=i+1;j<centers.length;j++){
+            const dx = centers[i].cx - centers[j].cx;
+            const dy = centers[i].cy - centers[j].cy;
+            const d = Math.hypot(dx,dy);
+            if(d < minD) minD = d;
+        }
+    }
+    return minD;
+}
+function __clampPoints(points, atomSize, bounds){
+    const {left, right, top, bottom} = bounds; // bottom is maxYTop
+    return points.map(p => ({
+        x: Math.min(Math.max(p.x, left), right - atomSize),
+        y: Math.min(Math.max(p.y, top), bottom)
+    }));
+}
+
+function __resolveOverlaps(points, atomSize, bounds){
+    // Simple relaxation: push circles apart if they overlap.
+    // points: [{x,y}] top-left; treated as circles with radius atomSize/2 around center.
+    const {left, right, top, bottom} = bounds;
+    const r = atomSize / 2;
+    const minD = atomSize * 1.04; // desired center distance
+    const centers = points.map(p => ({cx: p.x + r, cy: p.y + r}));
+
+    for(let iter=0; iter<90; iter++){
+        let moved = 0;
+        for(let i=0;i<centers.length;i++){
+            for(let j=i+1;j<centers.length;j++){
+                let dx = centers[i].cx - centers[j].cx;
+                let dy = centers[i].cy - centers[j].cy;
+                let d = Math.hypot(dx,dy);
+
+                if(d < 0.001){
+                    // same spot - random nudge
+                    dx = (Math.random()*2-1) * 0.5;
+                    dy = (Math.random()*2-1) * 0.5;
+                    d = Math.hypot(dx,dy);
+                }
+                if(d < minD){
+                    const overlap = (minD - d) / 2;
+                    const ux = dx / d;
+                    const uy = dy / d;
+                    centers[i].cx += ux * overlap;
+                    centers[i].cy += uy * overlap;
+                    centers[j].cx -= ux * overlap;
+                    centers[j].cy -= uy * overlap;
+                    moved++;
+                }
+            }
+        }
+
+        // clamp to bounds each iter
+        for(const c of centers){
+            c.cx = Math.min(Math.max(c.cx, left + r), right - r);
+            c.cy = Math.min(Math.max(c.cy, top + r), bottom - r); // bottom is maxYTop, so add r allowance
+        }
+
+        if(moved === 0) break;
+    }
+    return centers.map(c => ({
+        x: c.cx - r,
+        y: c.cy - r
+    }));
+}
+function __forceDistribute(points, atomSize, bounds){
+    // Force-directed spreading to use more space and eliminate residual overlaps.
+    const {left, right, top, bottom} = bounds;
+    const r = atomSize/2;
+    const minD = atomSize * 1.08;
+
+    let nodes = points.map(p => ({
+        x: p.x + r,
+        y: p.y + r,
+        vx: 0,
+        vy: 0
+    }));
+
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+
+    for(let iter=0; iter<520; iter++){
+        // pairwise repulsion when too close
+        for(let i=0;i<nodes.length;i++){
+            for(let j=i+1;j<nodes.length;j++){
+                let dx = nodes[i].x - nodes[j].x;
+                let dy = nodes[i].y - nodes[j].y;
+                let d = Math.hypot(dx,dy) || 0.001;
+                if(d < minD){
+                    const push = (minD - d) * 0.10;
+                    dx /= d; dy /= d;
+                    nodes[i].vx += dx * push;
+                    nodes[i].vy += dy * push;
+                    nodes[j].vx -= dx * push;
+                    nodes[j].vy -= dy * push;
+                }
+            }
+        }
+
+        // soft centering so it doesn't explode outwards
+        for(const n of nodes){
+            n.vx += (cx - n.x) * 0.00045;
+            n.vy += (cy - n.y) * 0.00045;
+        }
+
+        // integrate with damping + clamp
+        for(const n of nodes){
+            n.x += n.vx;
+            n.y += n.vy;
+            n.vx *= 0.80;
+            n.vy *= 0.80;
+
+            n.x = Math.min(Math.max(n.x, left + r), right - r);
+            n.y = Math.min(Math.max(n.y, top + r), bottom - r);
+        }
+    }
+
+    return nodes.map(n => ({ x: n.x - r, y: n.y - r }));
+}
+
+
+function __fitPresetNoOverlap(preset, startAtomSize, region, bounds, minAtomSize){
+    // Iteratively shrink atom size until min center distance is large enough.
+    // This is robust for dense presets (e.g., glucose/sucrose when showing explicit H).
+    let s = startAtomSize;
+    const safety = 1.04; // center distance should be >= atomSize * safety
+    for(let iter=0; iter<10; iter++){
+        const laid = layoutFromPreset(preset, s, region);
+        let pts = __clampPoints(laid.atoms.map(p=>({x:p.x,y:p.y})), s, bounds);
+        // 先做一次排斥鬆弛，把太靠近的球推開(比單純縮小更有效)
+        pts = __resolveOverlaps(pts, s, bounds);
+        pts = __forceDistribute(pts, s, bounds);
+        pts = __resolveOverlaps(pts, s, bounds);
+        const minD = __minCenterDistance(pts, s);
+
+        if(minD >= s * safety) {
+            return { atomSize: s, points: pts, bonds: laid.bonds };
+        }
+        // shrink a bit and retry
+        const next = Math.max(minAtomSize, Math.floor(s * 0.92));
+        if(next === s) break;
+        s = next;
+    }
+    // fallback: return last layout (best effort)
+    const laid = layoutFromPreset(preset, s, region);
+    let pts = __clampPoints(laid.atoms.map(p=>({x:p.x,y:p.y})), s, bounds);
+    pts = __resolveOverlaps(pts, s, bounds);
+    pts = __forceDistribute(pts, s, bounds);
+    pts = __resolveOverlaps(pts, s, bounds);
+    return { atomSize: s, points: pts, bonds: laid.bonds };
+}
+
+
+// SVG bond rendering that follows floating atoms (updates each frame)
+let __bondRAF = null;
+function stopBondRAF(){
+    if(__bondRAF){ cancelAnimationFrame(__bondRAF); __bondRAF = null; }
+}
+
+function renderBonds(svg, atoms, bonds){
+    if(!svg) return;
+    svg.innerHTML = "";
+    const frag = document.createDocumentFragment();
+
+    bonds.forEach((bd, idx) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("data-a", String(bd.a));
+        line.setAttribute("data-b", String(bd.b));
+        // class by type
+        if (bd.type === "ionic") line.classList.add("dashed");
+        if (bd.type === "double" || bd.type === "triple") line.classList.add("thin");
+        frag.appendChild(line);
+
+        // double/triple: render additional parallel lines
+        if (bd.type === "double" || bd.type === "triple"){
+            const extraCount = (bd.type === "triple") ? 2 : 1;
+            for(let k=0;k<extraCount;k++){
+                const l2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                l2.setAttribute("data-a", String(bd.a));
+                l2.setAttribute("data-b", String(bd.b));
+                l2.classList.add("thin");
+                l2.setAttribute("data-parallel", String(k+1));
+                frag.appendChild(l2);
+            }
+        }
+    });
+
+    svg.appendChild(frag);
+
+    // update positions now + each frame
+    const update = () => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+        svg.setAttribute("width", w);
+        svg.setAttribute("height", h);
+
+        const atomRects = atoms.map(el => el.getBoundingClientRect());
+        const lines = svg.querySelectorAll("line");
+        lines.forEach(line => {
+            const a = parseInt(line.getAttribute("data-a"),10);
+            const b = parseInt(line.getAttribute("data-b"),10);
+            if(isNaN(a)||isNaN(b) || !atomRects[a] || !atomRects[b]) return;
+
+            const ra = atomRects[a];
+            const rb = atomRects[b];
+
+            const x1 = ra.left + ra.width/2;
+            const y1 = ra.top  + ra.height/2;
+            const x2 = rb.left + rb.width/2;
+            const y2 = rb.top  + rb.height/2;
+
+            // For multi-lines, add slight perpendicular offset
+            const parallel = parseInt(line.getAttribute("data-parallel")||"0",10);
+            let ox = 0, oy = 0;
+            if(parallel){
+                const dx = x2-x1, dy = y2-y1;
+                const len = Math.max(1, Math.hypot(dx,dy));
+                const nx = -dy/len, ny = dx/len; // perpendicular unit
+                const gap = Math.max(2.5, ra.width * 0.09);
+                // alternate sides
+                const sign = (parallel % 2 === 1) ? 1 : -1;
+                ox = nx * gap * sign;
+                oy = ny * gap * sign;
+            }
+
+            line.setAttribute("x1", String(x1 + ox));
+            line.setAttribute("y1", String(y1 + oy));
+            line.setAttribute("x2", String(x2 + ox));
+            line.setAttribute("y2", String(y2 + oy));
+        });
+
+        __bondRAF = requestAnimationFrame(update);
+    };
+
+    stopBondRAF();
+    update();
+}
+
+
+
+// ===== 文字自動縮放：字體依字數/空間自動調整，但「區域範圍固定」 =====
+function fitTextToBox(el, minPx, maxPx) {
+    if (!el) return;
+    const cw = el.clientWidth, ch = el.clientHeight;
+    if (cw <= 0 || ch <= 0) return;
+
+    let low = minPx, high = maxPx, best = minPx;
+
+    for (let i = 0; i < 18; i++) {
+        const mid = (low + high) / 2;
+        el.style.fontSize = mid + 'px';
+        if (el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight) {
+            best = mid;
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    el.style.fontSize = Math.floor(best) + 'px';
+}
+
+function refitInfoText() {
+    const info = document.getElementById('info');
+    if (!info) return;
+
+    const h2 = info.querySelector('h2');
+    if (!h2) return;
+
+    // 只讓左側標題自動縮放；右側介紹維持固定字級，超出就自動斷行
+    const boxH = info.clientHeight || 120;
+    const titleMax = Math.min(180, Math.max(44, boxH * 0.85));
+
+    fitTextToBox(h2, 24, titleMax);
+}
+
+let _refitTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(_refitTimer);
+    _refitTimer = setTimeout(refitInfoText, 120);
+});
+
+
+function play(opts = {}) {
+    const area = document.getElementById("moleculeArea");
+    const info = document.getElementById("info");
+    const ansPanel = document.getElementById("ansPanel");
+
+    // clear any pending play timers (so QR override can safely interrupt)
+    clearPlayTimers();
+
+    // reset
+    area.innerHTML = "";
+    const bondSvgReset = document.getElementById("bondLayer");
+    if (bondSvgReset) { bondSvgReset.innerHTML = ""; bondSvgReset.style.opacity = 0; }
+    stopBondRAF();
+    info.style.opacity = 0;
+    if (ansPanel) {
+        ansPanel.style.opacity = 0;
+        ansPanel.style.transform = "translateY(10px) scale(0.98)";
+        const peek = ansPanel.querySelector("#peekImg");
+        if (peek) {
+            peek.style.opacity = 0;
+            // keep src on fade-out? clearing avoids flashing on next non-override
+            if (!__overrideActive) peek.removeAttribute("src");
+        }
+    }
+
+    const data = (opts && opts.data) ? opts.data : rawData[index];
+    // === 元素球動畫已停用：僅顯示右側中間的文字資訊與左側圖片 ===
+    if(!ENABLE_ATOMS){
+        // inject text (keep hidden for measuring)
+        info.innerHTML = `<h2>${data.n}</h2><p><span class="descText">${renderZhuyinSide(data.d)}</span></p>`;
+        info.style.opacity = 0;
+        requestAnimationFrame(refitInfoText);
+
+        // ensure bond layer hidden + stopped
+        const bondSvgOff = document.getElementById("bondLayer");
+        if (bondSvgOff) { bondSvgOff.innerHTML = ""; bondSvgOff.style.opacity = 0; }
+        stopBondRAF();
+
+        // choose random answer image (avoid last two)
+        if (ansPanel) {
+            const img = ansPanel.querySelector("#ansImg") || ansPanel.querySelector('img[data-role="answer"]') || ansPanel.querySelector("img");
+            const base = pickAnswerBase();
+            if (img) {
+                setImageWithFallback(img, base, () => {
+                    if (__overrideActive) requestAnimationFrame(positionPeekBetween);
+                });
+            }
+
+            // QR override：仍保留 scanspeek（可選）
+            const peek = ansPanel.querySelector("#peekImg");
+            if (peek) {
+                if (__overrideActive) {
+                    const peekBase = pickPeekBase();
+                    setImageWithFallback(peek, peekBase, () => {
+                        requestAnimationFrame(positionPeekBetween);
+                    });
+                    peek.style.opacity = 1;
+                    requestAnimationFrame(positionPeekBetween);
+                } else {
+                    peek.style.opacity = 0;
+                    peek.removeAttribute("src");
+                }
+            }
+        }
+
+        // show panels
+        const __showDelayMs = (opts && typeof opts.showDelayMs === "number") ? opts.showDelayMs : 900;
+        const __fadeOutMs   = (opts && typeof opts.fadeOutMs === "number")   ? opts.fadeOutMs   : 6000;
+        const __nextMs      = (opts && typeof opts.nextMs === "number")      ? opts.nextMs      : 7500;
+        const __autoNext    = (opts && typeof opts.autoNext === "boolean")   ? opts.autoNext    : true;
+        const __advance     = (opts && typeof opts.advanceIndex === "boolean") ? opts.advanceIndex : true;
+
+        __setPlayTimeout(() => {
+            refitInfoText();
+            info.style.opacity = 1;
+            if (ansPanel) {
+                ansPanel.style.opacity = 1;
+                ansPanel.style.transform = "translateY(0) scale(1)";
+                if (__overrideActive) requestAnimationFrame(positionPeekBetween);
+            }
+        }, __showDelayMs);
+
+        __setPlayTimeout(() => {
+            info.style.opacity = 0;
+            if (ansPanel) {
+                ansPanel.style.opacity = 0;
+                ansPanel.style.transform = "translateY(10px) scale(0.98)";
+                const peek = ansPanel.querySelector("#peekImg");
+                if (peek) {
+                    peek.style.opacity = 0;
+                    if (!__overrideActive) peek.removeAttribute("src");
+                }
+            }
+        }, __fadeOutMs);
+
+        if (__autoNext) {
+            __setPlayTimeout(() => {
+                if (__advance) index = (index + 1) % rawData.length;
+                play();
+            }, __nextMs);
+        }
+        return;
+    }
+
+    const atomList = parseFormula(data.n);
+    const atomCount = atomList.length;
+
+    // inject text (keep hidden for measuring)
+    info.innerHTML = `<h2>${data.n}</h2><p>${renderZhuyinSide(data.d)}</p>`;
+    info.style.opacity = 0;
+    // 先讓文字自動縮放到固定盒子內（避免貼邊/溢出）
+    requestAnimationFrame(refitInfoText);
+
+    // probe base atom size (responsive)
+    const probe = document.createElement('div');
+    probe.className = 'atom H';
+    probe.style.visibility = 'hidden';
+    probe.style.left = '-9999px';
+    probe.style.top = '-9999px';
+    area.appendChild(probe);
+    const baseAtomSize = probe.getBoundingClientRect().width || 80;
+    probe.remove();
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const infoRect = info.getBoundingClientRect();
+    const margin = Math.max(16, baseAtomSize * 0.25);
+
+    // right-side region (tweak here if needed)
+    const regionLeft = Math.max(margin, vw * 0.55);
+    const regionRight = Math.min(vw - margin, vw * 0.98);
+    const regionTop = Math.max(margin, vh * 0.08);
+
+    const regionW = Math.max(10, regionRight - regionLeft);
+
+    // compute layout with autoshrink and bounds
+    let finalAtomSize = baseAtomSize;
+    let cols = 1, rows = atomCount, cell = baseAtomSize;
+    let maxYTop = Math.max(regionTop, Math.min(infoRect.top - finalAtomSize - margin, vh - finalAtomSize - margin));
+    for (let iter = 0; iter < 3; iter++) {
+        maxYTop = Math.max(regionTop, Math.min(infoRect.top - finalAtomSize - margin, vh - finalAtomSize - margin));
+        const regionH = Math.max(10, (maxYTop + finalAtomSize) - regionTop);
+
+        const aspect = regionW / regionH;
+        cols = Math.max(1, Math.ceil(Math.sqrt(atomCount * aspect)));
+        rows = Math.max(1, Math.ceil(atomCount / cols));
+        cell = Math.min(regionW / cols, regionH / rows);
+
+        // autoshrink (min 28px)
+        finalAtomSize = Math.max(18, Math.min(baseAtomSize, cell * 0.88));
+    }
+    // recompute with final size
+    maxYTop = Math.max(regionTop, Math.min(infoRect.top - finalAtomSize - margin, vh - finalAtomSize - margin));
+    const regionH = Math.max(10, (maxYTop + finalAtomSize) - regionTop);
+    cell = Math.min(regionW / cols, regionH / rows);
+
+    let fontSize = Math.max(12, finalAtomSize * 0.42);
+
+    // launch origin: near center but above info area
+    const startX = vw * 0.50 - finalAtomSize / 2;
+    const startY = Math.max(regionTop, Math.min(vh * 0.70, maxYTop));
+
+    
+    // ----- Decide molecular target positions (preset vs grid fallback) -----
+    const formulaKey = normalizeFormulaKey(data.n);
+    const presetRaw = getMoleculePreset(formulaKey);
+    const formulaCounts = parseFormulaCounts(formulaKey);
+    const preset = (presetRaw && presetRaw.atoms && presetRaw.bonds)
+        ? addExplicitHydrogensToMatch(JSON.parse(JSON.stringify(presetRaw.atoms)), JSON.parse(JSON.stringify(presetRaw.bonds)), formulaCounts)
+        : presetRaw;
+
+    // Region center for molecule (keep in right side, above info)
+    const regionCenterX = (regionLeft + regionRight) / 2;
+    const regionCenterY = regionTop + regionH * 0.52;
+    const region = { cx: regionCenterX, cy: regionCenterY };
+
+    let targetList = null;
+    let bondList = [];
+
+    if (preset && preset.atoms && preset.atoms.length === atomCount) {
+        // 針對「元素球很多」的分子(如 C₆H₁₂O₆ / C₁₂H₂₂O₁₁)：
+        // 先用 preset 佈局，再自動縮小球/字，直到不會互相重疊
+        // 針對「元素球很多」的分子：使用更大的可用範圍 + 力場分散，並在必要時再縮小重試
+        const regionW = (regionRight - regionLeft);
+        const regionH = (maxYTop - regionTop);
+        const density = (atomCount * finalAtomSize * finalAtomSize) / Math.max(1, (regionW * regionH));
+
+        // 空間很擠時，把可用範圍擴到更寬(幾乎整個畫面)，讓球有地方散開
+        const wideBounds = density > 0.34;
+        const marginX = Math.max(12, vw * 0.06);
+        const marginY = 8;
+
+        const boundsUsed = wideBounds
+            ? { left: marginX, right: vw - marginX, top: regionTop + marginY, bottom: maxYTop }
+            : { left: regionLeft, right: regionRight, top: regionTop, bottom: maxYTop };
+
+        let attemptSize = finalAtomSize;
+        let fitted = null;
+
+        for(let tries=0; tries<8; tries++){
+            fitted = __fitPresetNoOverlap(
+                preset,
+                attemptSize,
+                region,
+                boundsUsed,
+                18
+            );
+
+            // 檢查是否仍有碰撞/重疊
+            const minD = __minCenterDistance(fitted.points, fitted.atomSize);
+            if(minD >= fitted.atomSize * 1.02) break;
+
+            // 仍太擠 -> 再縮小一點重試
+            const next = Math.max(18, Math.floor(attemptSize * 0.90));
+            if(next === attemptSize) break;
+            attemptSize = next;
+        }
+
+        // 用最佳尺寸覆蓋(避免 preset 彼此覆蓋)
+        finalAtomSize = fitted.atomSize;
+        targetList = fitted.points;
+        bondList = fitted.bonds;
+    }
+
+    // If no preset (or mismatch), use grid fallback
+    if (!targetList) {
+        targetList = atomList.map((_, i) => {
+            const c = i % cols;
+            const r = Math.floor(i / cols);
+
+            let x = regionLeft + c * cell + (cell - finalAtomSize) / 2;
+            let y = regionTop + r * cell + (cell - finalAtomSize) / 2;
+
+            // subtle jitter
+            const jitter = Math.min(6, Math.max(0, (cell - finalAtomSize) / 4));
+
+            // 如果空間很緊(球快貼到 cell 邊界)，就把 jitter 幾乎關掉避免重疊
+            const tight = (cell - finalAtomSize) < (finalAtomSize * 0.18);
+            const j = tight ? jitter * 0.15 : jitter;
+            x += (Math.random() * 2 - 1) * j;
+            y += (Math.random() * 2 - 1) * j;
+
+            // clamp
+            x = Math.min(Math.max(x, regionLeft), regionRight - finalAtomSize);
+            y = Math.min(Math.max(y, regionTop), maxYTop);
+            return { x, y };
+        });
+
+        // naive bonds for fallback: connect sequentially (visual only)
+        bondList = atomList.length >= 2 ? atomList.slice(1).map((_, i) => ({ a: i, b: i+1, type: "single" })) : [];
+    }
+
+    // 若 preset 自動縮小了球體尺寸，這裡同步更新字體大小
+    fontSize = Math.max(11, finalAtomSize * 0.42);
+
+    const createdAtoms = [];
+
+    targetList.forEach((pos, i) => {
+        const meta = (preset && preset.atoms) ? preset.atoms[i] : null;
+        const symbol = meta ? meta.symbol : atomList[i];
+        const isHidden = false;
+
+        const d = document.createElement("div");
+        d.className = `atom ${symbol}`;
+        // inner wrapper (floating animation runs here; outer keeps left/top positioning stable)
+        const inner = document.createElement("div");
+        inner.className = "atomInner";
+        const label = document.createElement("span");
+        label.className = "atomLabel";
+        label.textContent = symbol;
+        inner.appendChild(label);
+        d.appendChild(inner);
+
+        // dynamic sizing
+        d.style.width = finalAtomSize + "px";
+        d.style.height = finalAtomSize + "px";
+        d.style.fontSize = fontSize + "px";
+
+        // floating params (random per atom)
+        const ampBase = Math.max(2, finalAtomSize * (0.05 + Math.random() * 0.08)); // px
+        const ampX = (Math.random() * 2 - 1) * ampBase;
+        const ampY = (Math.random() * 2 - 1) * ampBase * 1.15;
+        const dur = (1.8 + Math.random() * 2.8); // seconds
+        const delay = Math.random() * 1.6;
+
+        d.style.setProperty('--floatAmpX', ampX.toFixed(2) + 'px');
+        d.style.setProperty('--floatAmpY', ampY.toFixed(2) + 'px');
+        d.style.setProperty('--floatDur', dur.toFixed(2) + 's');
+        d.style.setProperty('--floatDelay', delay.toFixed(2) + 's');
+
+        d.style.left = startX + "px";
+        d.style.top = startY + "px";
+        d.style.opacity = "0";
+
+        area.appendChild(d);
+        createdAtoms.push(d);
+
+        const xClamped = pos.x;
+        const yClamped = pos.y;
+
+        if (!isHidden) {
+            __setPlayTimeout(() => {
+                d.style.opacity = "1";
+            d.style.left = xClamped + "px";
+            d.style.top = yClamped + "px";
+
+            // start gentle floating AFTER the positioning transition settles
+            __setPlayTimeout(() => d.classList.add("floating"), 1600);
+            }, i * 35);
+        }
+    });
+
+    // Draw bond lines (follows floating)
+    const bondSvg = document.getElementById("bondLayer");
+    if (bondSvg) {
+        // normalize bond objects
+        const bonds = (bondList || []).map(b => {
+            if (Array.isArray(b)) return { a: b[0], b: b[1], type: b[2] || "single" };
+            return b;
+        });
+        renderBonds(bondSvg, createdAtoms, bonds);
+    }
+
+    
+    // choose random answer image (avoid last two)
+    if (ansPanel) {
+        const img = ansPanel.querySelector("#ansImg") || ansPanel.querySelector('img[data-role="answer"]') || ansPanel.querySelector("img");
+        const base = pickAnswerBase();
+        if (img) {
+            setImageWithFallback(img, base, () => {
+                // If override peek is showing, reposition after the answer image is ready
+                if (__overrideActive) requestAnimationFrame(positionPeekBetween);
+            });
+        }
+
+        // When QR override is active (11a / 11d), also show a random scanspeek image to the right
+        const peek = ansPanel.querySelector("#peekImg");
+        if (peek) {
+            if (__overrideActive) {
+                const peekBase = pickPeekBase();
+                setImageWithFallback(peek, peekBase, () => {
+                    requestAnimationFrame(positionPeekBetween);
+                });
+                peek.style.opacity = 1;
+                // Ensure position is correct even if image is cached
+                requestAnimationFrame(positionPeekBetween);
+            } else {
+                peek.style.opacity = 0;
+                peek.removeAttribute("src");
+            }
+        }
+    }
+
+
+// show panels
+const __showDelayMs = (opts && typeof opts.showDelayMs === "number") ? opts.showDelayMs : 900;
+const __fadeOutMs   = (opts && typeof opts.fadeOutMs === "number")   ? opts.fadeOutMs   : 6000;
+const __nextMs      = (opts && typeof opts.nextMs === "number")      ? opts.nextMs      : 7500;
+const __autoNext    = (opts && typeof opts.autoNext === "boolean")   ? opts.autoNext    : true;
+const __advance     = (opts && typeof opts.advanceIndex === "boolean") ? opts.advanceIndex : true;
+
+__setPlayTimeout(() => {
+    // 顯示前再做一次縮放（避免字體受載入/縮放影響）
+    refitInfoText();
+    info.style.opacity = 1;
+    const bondSvg1 = document.getElementById('bondLayer');
+    if (bondSvg1) bondSvg1.style.opacity = 1;
+    if (ansPanel) {
+        ansPanel.style.opacity = 1;
+        ansPanel.style.transform = "translateY(0) scale(1)";
+        // If peek is visible (QR override mode), put it between an-image and bg1
+        if (__overrideActive) requestAnimationFrame(positionPeekBetween);
+    }
+}, __showDelayMs);
+
+// fade out
+__setPlayTimeout(() => {
+    area.querySelectorAll('.atom').forEach(a => a.style.opacity = 0);
+    const bondSvg2 = document.getElementById('bondLayer');
+    if (bondSvg2) bondSvg2.style.opacity = 0;
+    info.style.opacity = 0;
+    if (ansPanel) {
+        ansPanel.style.opacity = 0;
+        ansPanel.style.transform = "translateY(10px) scale(0.98)";
+        const peek = ansPanel.querySelector("#peekImg");
+        if (peek) {
+            peek.style.opacity = 0;
+            // keep src on fade-out? clearing avoids flashing on next non-override
+            if (!__overrideActive) peek.removeAttribute("src");
+        }
+    }
+}, __fadeOutMs);
+
+// next
+if (__autoNext) {
+    __setPlayTimeout(() => {
+        if (__advance) index = (index + 1) % rawData.length;
+        play();
+    }, __nextMs);
+}
+}
+
+
+function initStars(){
+    const layer = document.getElementById("starLayer");
+    if(!layer) return;
+
+    // 重新生成（避免 resize 後位置跑掉）
+    layer.innerHTML = "";
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // 星星數量：比原本多一點，閃爍更明顯
+    const area = w * h;
+    const count = Math.min(280, Math.max(120, Math.floor(area / 11000)));
+
+    for(let i=0;i<count;i++){
+        const s = document.createElement("span");
+
+        // 約 14% 做成較亮的大星星
+        const isBig = Math.random() < 0.18;
+        s.className = isBig ? "star big" : "star";
+
+        // 大小：小星 0.9~2.8px / 大星 2.2~4.8px
+        const size = isBig ? (2.2 + Math.random() * 2.6) : (0.9 + Math.random() * 1.9);
+        s.style.width = size + "px";
+        s.style.height = size + "px";
+
+        // 位置：整張畫面；稍微避開最底部 UI（留 12vh）
+        const topMax = Math.max(0, h * 0.88);
+        s.style.left = (Math.random() * w) + "px";
+        s.style.top  = (Math.random() * topMax) + "px";
+
+        // 閃爍參數：大星更慢一些、更有存在感
+        const dur = isBig ? (1.8 + Math.random() * 2.2) : (0.9 + Math.random() * 1.9);
+        const delay = Math.random() * 2.2;
+        s.style.setProperty("--twinkleDur", dur + "s");
+        s.style.setProperty("--twinkleDelay", delay + "s");
+
+        // 初始亮度差異（動畫會拉到 1.0）
+        const base = isBig ? (0.12 + Math.random() * 0.28) : (0.05 + Math.random() * 0.22);
+        s.style.opacity = String(base);
+
+        layer.appendChild(s);
+    }
+}
+
+// resize 時重新佈局星星（節流）
+let __starResizeTimer = null;
+window.addEventListener("resize", () => {
+    clearTimeout(__starResizeTimer);
+    __starResizeTimer = setTimeout(initStars, 120);
+});
+
+let index = 0;
+
+window.addEventListener("load", async () => {
+    initStars();
+    // 啟動 QR 掃描（後置鏡頭優先；失敗則用前置鏡頭掃描）
+    startQrScanner().catch(err => console.error('QR 掃描鏡頭啟動失敗', err));
+    // Preload answer images quickly, but don\'t block the scene if it\'s slow
+    try {
+        await Promise.race([
+            // optional preloading (safe even on file://)
+            new Promise((r) => setTimeout(r, 0)),
+            new Promise((r) => setTimeout(r, 600))
+        ]);
+    } catch (e) {}
+    play();
+});
+</script>
+</body>
+</html>
